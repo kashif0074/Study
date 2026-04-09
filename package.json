@@ -24,7 +24,7 @@
     "@react-navigation/stack": "^7.6.12",
     "date-fns": "^4.1.0",
     "expo": "~54.0.20",
-    "expo-audio": "~1.1.0",
+    "expo-audio": "~1.1.1",
     "expo-av": "~16.0.8",
     "expo-document-picker": "~14.0.8",
     "expo-firebase-app": "^2.0.0",

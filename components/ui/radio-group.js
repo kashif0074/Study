@@ -1,34 +1,55 @@
 // components/ui/radio-group.js
-import React, { useState } from "react";
-import { View, TouchableOpacity, Text, StyleSheet } from "react-native";
+import React from "react";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { useAuth } from "../../context/AuthContext";
 
-export function RadioGroup({ children, value, onValueChange, disabled }) {
+export const RadioGroup = ({ children, value, onValueChange, style }) => {
   return (
-    <View>
-      {React.Children.map(children, (child) =>
-        React.cloneElement(child, { groupValue: value, onValueChange, disabled })
-      )}
+    <View style={[styles.group, style]}>
+      {React.Children.map(children, (child) => {
+        if (React.isValidElement(child)) {
+          return React.cloneElement(child, {
+            selected: child.props.value === value,
+            onSelect: onValueChange,
+          });
+        }
+        return child;
+      })}
     </View>
   );
-}
+};
 
-export function RadioGroupItem({ value, id, groupValue, onValueChange, disabled }) {
-  const selected = groupValue === value;
+export const RadioGroupItem = ({ value, label, selected, onSelect }) => {
+  const { colors } = useAuth();
   return (
     <TouchableOpacity
-      disabled={disabled}
-      onPress={() => onValueChange?.(value)}
-      style={styles.row}
+      style={styles.item}
+      onPress={() => onSelect(value)}
+      activeOpacity={0.7}
     >
-      <View style={[styles.circle, selected && styles.selected]}>
-        {selected && <View style={styles.dot} />}
+      <View style={[styles.radio, { borderColor: colors.border, backgroundColor: colors.card }]}>
+        {selected && <View style={[styles.inner, { backgroundColor: colors.primary }]} />}
       </View>
+      <Text style={[styles.label, { color: colors.text }]}>{label}</Text>
     </TouchableOpacity>
   );
-}
+};
+
 const styles = StyleSheet.create({
-  row: { flexDirection: "row", alignItems: "center", marginVertical: 4 },
-  circle: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: "#6B21A8", justifyContent: "center", alignItems: "center" },
-  selected: { borderColor: "#6B21A8", backgroundColor: "#E9D5FF" },
-  dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: "#6B21A8" },
+  group: { gap: 12 },
+  item: { flexDirection: "row", alignItems: "center", gap: 12 },
+  radio: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  inner: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  label: { fontSize: 15, fontWeight: "500" },
 });

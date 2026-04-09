@@ -1,0 +1,1 @@
+querySrv ENOTFOUND _mongodb._tcp.studyspark-cluster.dkwsmop.mongodb.net

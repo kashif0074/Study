@@ -1,12 +1,13 @@
-// App.js (CORRECTED VERSION)
+// App.js (CORRECTED WITH ADMIN REDIRECT)
 import React, { useState, useEffect } from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createStackNavigator } from "@react-navigation/stack";
 import { Ionicons } from "@expo/vector-icons";
 import Toast from "react-native-toast-message";
-import { View, Text, Dimensions, Platform } from "react-native";
+import { View, Text, Dimensions, Platform, ActivityIndicator } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import './firebase/config';
 
 // Screens
 import SplashScreen from "./screens/SplashScreen";
@@ -18,8 +19,9 @@ import AITools from "./screens/AiTools";
 import StudyPlanner from "./screens/StudyPlanner";
 import Communities from "./screens/Communities";
 import ProfileScreen from "./screens/ProfileScreen";
+import AdminDashboard from "./screens/AdminDashboard";
 
-// Auth Context - SIRF EK BAAR IMPORT
+// Auth Context
 import { AuthProvider, useAuth } from "./context/AuthContext";
 
 const { width, height } = Dimensions.get("window");
@@ -27,7 +29,7 @@ const { width, height } = Dimensions.get("window");
 // --- RESPONSIVENESS UTILITY FUNCTIONS ---
 const BASE_WIDTH = 375;
 const MAX_CONTENT_WIDTH = 600;
-const scaleDimension = Math.min(width, MAX_CONTENT_WIDTH); 
+const scaleDimension = Math.min(width, MAX_CONTENT_WIDTH);
 const scaleFactor = scaleDimension / BASE_WIDTH;
 const verticalScaleFactor = height / 667;
 
@@ -41,11 +43,11 @@ const Stack = createStackNavigator();
 
 // Create Stack for Home Tab (includes NoteDetail)
 function HomeStackScreen() {
-  const { colors } = useAuth(); // Get colors here
-  
+  const { colors } = useAuth();
+
   return (
-    <Stack.Navigator 
-      screenOptions={{ 
+    <Stack.Navigator
+      screenOptions={{
         headerShown: false,
         cardStyle: { backgroundColor: colors.background }
       }}
@@ -58,11 +60,11 @@ function HomeStackScreen() {
 
 // Create Stack for Notes Tab (includes NoteDetail)
 function NotesStackScreen() {
-  const { colors } = useAuth(); // Get colors here
-  
+  const { colors } = useAuth();
+
   return (
-    <Stack.Navigator 
-      screenOptions={{ 
+    <Stack.Navigator
+      screenOptions={{
         headerShown: false,
         cardStyle: { backgroundColor: colors.background }
       }}
@@ -81,20 +83,55 @@ export default function App() {
     return () => clearTimeout(timer);
   }, []);
 
-  if (showSplash) {
-    return <SplashScreen onFinish={() => setShowSplash(false)} />; 
-  }
-
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <NavigationContainer>
-          <MainTabs />
-          <AuthOverlay /> 
-          <Toast />
-        </NavigationContainer>
+        {showSplash ? (
+          <SplashScreen onFinish={() => setShowSplash(false)} />
+        ) : (
+          <AppContent />
+        )}
       </AuthProvider>
     </SafeAreaProvider>
+  );
+}
+
+// Main App Content - Handles Admin Redirect
+function AppContent() {
+  const { user, loading, isAdmin, colors, showAuth, closeAuth } = useAuth();
+  const [showAdminDashboard, setShowAdminDashboard] = useState(false);
+
+  // Show loading indicator
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors?.background || '#FFFFFF' }}>
+        <ActivityIndicator size="large" color={colors?.primary || '#6B21A8'} />
+      </View>
+    );
+  }
+
+  // 🔥 IMPORTANT: Agar admin logged in hai to directly Admin Dashboard dikhao
+  if (user?.isAdmin && !showAdminDashboard) {
+    return (
+      <>
+        <AdminDashboard onBack={() => setShowAdminDashboard(false)} />
+        <Toast />
+      </>
+    );
+  }
+
+  // Normal user flow
+  return (
+    <NavigationContainer>
+      <MainTabs />
+      {showAuth && (
+        <AuthScreen
+          visible={true}
+          onClose={closeAuth}
+        />
+      )}
+      <Toast />
+    </NavigationContainer>
   );
 }
 
@@ -102,7 +139,7 @@ export default function App() {
 function MainTabs() {
   const totalNotes = 42;
   const totalPosts = 18;
-  const { colors } = useAuth(); // Get colors here
+  const { colors } = useAuth();
 
   return (
     <Tab.Navigator
@@ -112,10 +149,10 @@ function MainTabs() {
           height: verticalScale(70),
           paddingBottom: verticalScale(10),
           paddingTop: verticalScale(10),
-          backgroundColor: colors.card, // Use theme color
+          backgroundColor: colors.card,
           borderTopWidth: moderateScale(1),
-          borderTopColor: colors.border, // Use theme color
-          shadowColor: "#A78BFA",
+          borderTopColor: colors.border,
+          shadowColor: colors.primary,
           shadowOffset: { width: 0, height: verticalScale(-2) },
           shadowOpacity: 0.08,
           shadowRadius: moderateScale(8),
@@ -140,12 +177,12 @@ function MainTabs() {
             <Ionicons
               name={iconName}
               size={moderateScale(22)}
-              color={focused ? colors.primary : colors.subText} // Use theme colors
+              color={focused ? colors.primary : colors.subText}
             />
           );
         },
-        tabBarActiveTintColor: colors.primary, // Use theme color
-        tabBarInactiveTintColor: colors.subText, // Use theme color
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.subText,
       })}
     >
       <Tab.Screen name="Home" component={HomeStackScreen} />
@@ -157,24 +194,5 @@ function MainTabs() {
         {() => <ProfileScreen totalNotes={totalNotes} totalPosts={totalPosts} />}
       </Tab.Screen>
     </Tab.Navigator>
-  );
-}
-
-// Auth Modal Overlay
-function AuthOverlay() {
-  const { showAuth, login, closeAuth } = useAuth(); 
-
-  if (!showAuth) return null;
-
-  const handleAuthSuccess = (userData) => { 
-    login(userData || { name: "Authenticated User", email: "user@studyspark.com" });
-  };
-
-  return (
-    <AuthScreen
-      visible={true}
-      onAuthSuccess={handleAuthSuccess}
-      onClose={closeAuth} 
-    />
   );
 }

@@ -1,15 +1,25 @@
 // components/ui/progress.js
 import React from "react";
 import { View, StyleSheet } from "react-native";
+import { useAuth } from "../../context/AuthContext";
 
-export function Progress({ value, style }) {
+export const Progress = ({ value = 0, style }) => {
+  const { colors } = useAuth();
   return (
-    <View style={[styles.bar, style]}>
-      <View style={[styles.fill, { width: `${value}%` }]} />
+    <View style={[styles.container, { backgroundColor: colors.border }, style]}>
+      <View style={[styles.bar, { width: `${value}%`, backgroundColor: colors.primary }]} />
     </View>
   );
-}
+};
+
 const styles = StyleSheet.create({
-  bar: { height: 8, backgroundColor: "#E5E7EB", borderRadius: 4, overflow: "hidden" },
-  fill: { height: "100%", backgroundColor: "#6B21A8", borderRadius: 4 },
+  container: {
+    height: 8,
+    borderRadius: 4,
+    overflow: "hidden"
+  },
+  bar: {
+    height: "100%",
+    borderRadius: 4
+  },
 });

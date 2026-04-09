@@ -1,4 +1,4 @@
-// components/PostCard.js   (FULLY UPDATED)
+// components/PostCard.js
 import React, { useState } from "react";
 import {
   View,
@@ -9,20 +9,23 @@ import {
   StyleSheet,
   Keyboard,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
+import { useAuth } from "../context/AuthContext";
 
 export const PostCard = ({ post, onLike, onComment }) => {
+  const { colors } = useAuth();
+  const styles = getStyles(colors);
   const [isLiked, setIsLiked] = useState(post.isLiked || false);
   const [likes, setLikes] = useState(post.likes);
   const [showCommentInput, setShowCommentInput] = useState(false);
   const [comment, setComment] = useState("");
-  const [comments, setComments] = useState(post.comments || []); // <-- NEW
+  const [comments, setComments] = useState(post.comments || []);
 
   const typeStyle = {
-    note: { bg: "#E0E7FF", text: "#6366F1" },
-    question: { bg: "#FEF3C7", text: "#D97706" },
-    challenge: { bg: "#D1FAE5", text: "#059669" },
-  }[post.type];
+    note: { bg: colors.badges?.note || colors.accent, text: colors.primary },
+    question: { bg: colors.badges?.question || colors.warning + "20", text: colors.warning },
+    challenge: { bg: colors.badges?.challenge || colors.danger + "20", text: colors.secondary },
+  }[post.type] || { bg: colors.accent, text: colors.primary };
 
   const handleLike = () => {
     const newLiked = !isLiked;
@@ -45,8 +48,6 @@ export const PostCard = ({ post, onLike, onComment }) => {
     setComment("");
     setShowCommentInput(false);
     Keyboard.dismiss();
-
-    // Notify parent to update comment count
     onComment?.(post.id, newComment);
   };
 
@@ -62,7 +63,7 @@ export const PostCard = ({ post, onLike, onComment }) => {
           <Text style={styles.timestamp}>{post.timestamp}</Text>
         </View>
         <TouchableOpacity style={styles.moreBtn}>
-          <Ionicons name="ellipsis-vertical" size={20} color="#64748B" />
+          <Ionicons name="ellipsis-vertical" size={20} color={colors.subText} />
         </TouchableOpacity>
       </View>
 
@@ -98,7 +99,7 @@ export const PostCard = ({ post, onLike, onComment }) => {
           <Ionicons
             name={isLiked ? "heart" : "heart-outline"}
             size={22}
-            color={isLiked ? "#EF4444" : "#64748B"}
+            color={isLiked ? colors.danger : colors.subText}
           />
           <Text style={styles.actionCount}>{likes}</Text>
         </TouchableOpacity>
@@ -107,12 +108,12 @@ export const PostCard = ({ post, onLike, onComment }) => {
           style={styles.actionBtn}
           onPress={() => setShowCommentInput(true)}
         >
-          <Ionicons name="chatbubble-outline" size={22} color="#6B21A8" />
+          <Ionicons name="chatbubble-outline" size={22} color={colors.primary} />
           <Text style={styles.actionCount}>{comments.length}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.actionBtn}>
-          <Ionicons name="share-outline" size={22} color="#64748B" />
+          <Ionicons name="share-outline" size={22} color={colors.subText} />
         </TouchableOpacity>
       </View>
 
@@ -135,6 +136,7 @@ export const PostCard = ({ post, onLike, onComment }) => {
           <TextInput
             style={styles.commentInput}
             placeholder="Write a comment..."
+            placeholderTextColor={colors.placeholder}
             value={comment}
             onChangeText={setComment}
             autoFocus
@@ -146,7 +148,7 @@ export const PostCard = ({ post, onLike, onComment }) => {
             <Ionicons
               name="send"
               size={22}
-              color={comment.trim() ? "#6B21A8" : "#94A3B8"}
+              color={comment.trim() ? colors.primary : colors.placeholder}
             />
           </TouchableOpacity>
         </View>
@@ -155,16 +157,15 @@ export const PostCard = ({ post, onLike, onComment }) => {
   );
 };
 
-/* ====================== STYLES ====================== */
-const styles = StyleSheet.create({
+const getStyles = (colors) => StyleSheet.create({
   card: {
-    backgroundColor: "#fff",
+    backgroundColor: colors.card,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
     padding: 16,
     marginBottom: 12,
-    shadowColor: "#000",
+    shadowColor: colors.black,
     shadowOpacity: 0.04,
     shadowRadius: 6,
     elevation: 2,
@@ -178,15 +179,15 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: "#6366F1",
+    backgroundColor: colors.primary,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
   },
-  avatarLetter: { color: "#fff", fontWeight: "700", fontSize: 16 },
+  avatarLetter: { color: colors.white, fontWeight: "700", fontSize: 16 },
   headerInfo: { flex: 1 },
-  author: { fontSize: 15, fontWeight: "600", color: "#1E293B" },
-  timestamp: { fontSize: 12, color: "#94A3B8" },
+  author: { fontSize: 15, fontWeight: "600", color: colors.text },
+  timestamp: { fontSize: 12, color: colors.placeholder },
   moreBtn: { padding: 4 },
 
   badges: {
@@ -202,16 +203,16 @@ const styles = StyleSheet.create({
   },
   badgeText: { fontSize: 12, fontWeight: "600" },
   subjectBadge: {
-    backgroundColor: "#E9D5FF",
+    backgroundColor: colors.accent,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
   },
-  subjectText: { fontSize: 12, color: "#9333EA", fontWeight: "600" },
+  subjectText: { fontSize: 12, color: colors.primary, fontWeight: "600" },
 
   content: {
     fontSize: 14,
-    color: "#475569",
+    color: colors.text,
     lineHeight: 20,
     marginBottom: 12,
   },
@@ -227,7 +228,7 @@ const styles = StyleSheet.create({
     height: 180,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
   },
 
   actions: {
@@ -235,18 +236,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
+    borderTopColor: colors.border,
     gap: 24,
   },
   actionBtn: { flexDirection: "row", alignItems: "center", gap: 6 },
-  actionCount: { fontSize: 13, color: "#64748B" },
+  actionCount: { fontSize: 13, color: colors.subText },
 
-  // === COMMENTS LIST ===
   commentsList: {
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
+    borderTopColor: colors.border,
   },
   commentItem: {
     flexDirection: "row",
@@ -256,38 +256,38 @@ const styles = StyleSheet.create({
   },
   commentAuthor: {
     fontWeight: "600",
-    color: "#1E293B",
+    color: colors.text,
     marginRight: 6,
   },
   commentText: {
     flex: 1,
-    color: "#475569",
+    color: colors.text,
     fontSize: 13,
   },
   commentTime: {
     fontSize: 11,
-    color: "#94A3B8",
+    color: colors.placeholder,
     marginLeft: 6,
   },
 
-  // === COMMENT INPUT ===
   commentInputContainer: {
     flexDirection: "row",
     alignItems: "center",
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
+    borderTopColor: colors.border,
     gap: 8,
   },
   commentInput: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.background,
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 10,
     fontSize: 14,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
+    color: colors.text,
   },
 });

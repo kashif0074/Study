@@ -1,5 +1,5 @@
-// screens/StudyPlanner.js (FIXED & RESPONSIVE)
-import React, { useState } from "react";
+// screens/StudyPlanner.js (UPDATED FOR PDF/DOC/PPT FILES)
+import React, { useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -10,40 +10,42 @@ import {
   Modal,
   TextInput,
   Platform,
-  Dimensions,
+  useWindowDimensions,
   KeyboardAvoidingView,
+  StatusBar,
 } from "react-native";
-import { SafeAreaView } from 'react-native-safe-area-context'; // ✅ CORRECT IMPORT
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from "@expo/vector-icons";
 import { format, differenceInDays } from "date-fns";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
-
-const { width, height } = Dimensions.get('window');
-
-// 📏 Responsive scaling functions
-const scale = (size) => {
-  const baseWidth = 375; // iPhone 6/7/8 base
-  const scaleFactor = Math.min(width, 600) / baseWidth;
-  return size * scaleFactor;
-};
-
-const verticalScale = (size) => {
-  const baseHeight = 667; // iPhone 6/7/8 base
-  const scaleFactor = Math.min(height, 800) / baseHeight;
-  return size * scaleFactor;
-};
-
-const moderateScale = (size, factor = 0.5) => {
-  return size + (scale(size) - size) * factor;
-};
-
-// 📱 Device breakpoints
-const isSmallDevice = width < 375;
-const isTablet = width >= 768;
-const isLargeTablet = width >= 1024;
+import { useAuth } from "../context/AuthContext";
 
 export default function StudyPlanner() {
+  const { user, updateUser, colors, recordActivity } = useAuth();
+  const { width, height } = useWindowDimensions();
+
+  const isSmallDevice = width < 375;
+  const isTablet = width >= 768;
+  const isLargeTablet = width >= 1024;
+
+  const { scale, verticalScale, moderateScale } = useMemo(() => {
+    const baseWidth = 375;
+    const baseHeight = 667;
+    const scaleFactor = Math.min(width, 600) / baseWidth;
+    const vScaleFactor = Math.min(height, 800) / baseHeight;
+
+    const s = (size) => size * scaleFactor;
+    const vs = (size) => size * vScaleFactor;
+    const ms = (size, factor = 0.5) => size + (s(size) - size) * factor;
+
+    return { scale: s, verticalScale: vs, moderateScale: ms };
+  }, [width, height]);
+
+  const responsiveWidth = useMemo(() => Math.min(width, 600), [width]);
+
+  const styles = useMemo(() => getStyles(colors, scale, verticalScale, moderateScale, isTablet), [colors, scale, verticalScale, moderateScale, isTablet]);
+
   const [exams, setExams] = useState([]);
   const [studySessions, setStudySessions] = useState([]);
   const [isAddExamOpen, setIsAddExamOpen] = useState(false);
@@ -53,34 +55,72 @@ export default function StudyPlanner() {
     topics: "",
     files: [],
   });
-  const [isRecording, setIsRecording] = useState(false);
 
   const showToast = (title, message) => {
     Alert.alert(title, message, [{ text: "OK" }]);
   };
 
-  // --- File Upload ---
+  // --- File Upload Functions ---
   const pickDocument = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: [
           "application/pdf",
           "application/msword",
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // .docx
+          "application/vnd.ms-powerpoint", // .ppt
+          "application/vnd.openxmlformats-officedocument.presentationml.presentation", // .pptx
           "text/plain",
-          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "application/rtf",
         ],
         copyToCacheDirectory: true,
+        multiple: true, // Allow multiple file selection
       });
 
-      if (!result.canceled && result.assets[0]) {
-        const file = result.assets[0];
-        const updatedFiles = [...newExam.files, { 
-          name: file.name, 
-          type: "document",
-          size: file.size ? `${Math.round(file.size / 1024)}KB` : 'Unknown'
-        }];
+      if (!result.canceled && result.assets.length > 0) {
+        const uploadedFiles = result.assets.map(file => {
+          // Get file extension
+          const fileName = file.name;
+          const fileExt = fileName.split('.').pop().toLowerCase();
+
+          // Determine file type based on extension/mime type
+          let fileType = "document";
+          let fileIcon = "document";
+
+          if (fileExt === 'pdf' || file.mimeType === 'application/pdf') {
+            fileType = "pdf";
+            fileIcon = "document";
+          } else if (fileExt === 'doc' || fileExt === 'docx' ||
+            file.mimeType?.includes('word')) {
+            fileType = "doc";
+            fileIcon = "document-text";
+          } else if (fileExt === 'ppt' || fileExt === 'pptx' ||
+            file.mimeType?.includes('powerpoint')) {
+            fileType = "ppt";
+            fileIcon = "document-attach";
+          } else if (fileExt === 'txt' || file.mimeType === 'text/plain') {
+            fileType = "text";
+            fileIcon = "document-text";
+          }
+
+          return {
+            name: file.name,
+            type: fileType,
+            icon: fileIcon,
+            size: file.size ? `${Math.round(file.size / 1024)} KB` : 'Unknown',
+            uri: file.uri,
+            mimeType: file.mimeType
+          };
+        });
+
+        const updatedFiles = [...newExam.files, ...uploadedFiles];
         setNewExam({ ...newExam, files: updatedFiles });
-        showToast("Uploaded", `${file.name} added`);
+
+        if (uploadedFiles.length === 1) {
+          showToast("Uploaded", `${uploadedFiles[0].name} added`);
+        } else {
+          showToast("Uploaded", `${uploadedFiles.length} files added`);
+        }
       }
     } catch (err) {
       console.error("Document picker error:", err);
@@ -100,17 +140,24 @@ export default function StudyPlanner() {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: false,
         quality: 1,
+        allowsMultipleSelection: true,
       });
 
-      if (!result.canceled && result.assets[0]) {
-        const file = result.assets[0];
-        const updatedFiles = [...newExam.files, { 
-          name: `Image ${newExam.files.length + 1}`, 
+      if (!result.canceled && result.assets.length > 0) {
+        const uploadedImages = result.assets.map((image, index) => ({
+          name: `Image ${newExam.files.length + index + 1}`,
           type: "image",
-          size: 'Image'
-        }];
+          icon: "image",
+          size: 'Image',
+          uri: image.uri,
+          width: image.width,
+          height: image.height
+        }));
+
+        const updatedFiles = [...newExam.files, ...uploadedImages];
         setNewExam({ ...newExam, files: updatedFiles });
-        showToast("Uploaded", "Image added for OCR");
+
+        showToast("Uploaded", `${uploadedImages.length} image(s) added for OCR`);
       }
     } catch (err) {
       console.error("Image picker error:", err);
@@ -118,34 +165,74 @@ export default function StudyPlanner() {
     }
   };
 
-  // --- Voice Recording (Simulated) ---
-  const pickVoice = async () => {
+  const scanImage = async () => {
     try {
-      showToast("Recording", "Starting voice recording...");
-      setIsRecording(true);
-      
-      // Simulate recording
-      setTimeout(() => {
-        const voiceNote = `Voice Note ${newExam.files.length + 1}`;
-        const updatedFiles = [...newExam.files, { 
-          name: voiceNote, 
-          type: "voice",
-          size: 'Audio'
-        }];
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        showToast("Permission Denied", "Need camera access");
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 1,
+      });
+
+      if (!result.canceled && result.assets.length > 0) {
+        const scannedImage = {
+          name: `Scan ${newExam.files.length + 1}`,
+          type: "image",
+          icon: "camera",
+          size: 'Scan',
+          uri: result.assets[0].uri,
+          width: result.assets[0].width,
+          height: result.assets[0].height
+        };
+
+        const updatedFiles = [...newExam.files, scannedImage];
         setNewExam({ ...newExam, files: updatedFiles });
-        setIsRecording(false);
-        showToast("Voice Note Added", "Recording saved!");
-      }, 3000);
+
+        showToast("Scanned", "Image added for OCR");
+      }
     } catch (err) {
-      console.error("Voice recording error:", err);
-      setIsRecording(false);
-      showToast("Error", "Could not record voice note");
+      console.error("Camera error:", err);
+      showToast("Error", "Could not scan image");
     }
   };
+
 
   const removeFile = (index) => {
     const updated = newExam.files.filter((_, i) => i !== index);
     setNewExam({ ...newExam, files: updated });
+  };
+
+  // --- Get File Icon ---
+  const getFileIcon = (file) => {
+    // If file has custom icon property, use it
+    if (file.icon) return file.icon;
+
+    // Otherwise determine by type
+    switch (file.type) {
+      case "pdf": return "document";
+      case "doc": return "document-text";
+      case "ppt": return "document-attach";
+      case "text": return "document-text";
+      case "image": return "image";
+      default: return "document";
+    }
+  };
+
+  // --- Get File Type Display Text ---
+  const getFileTypeText = (file) => {
+    switch (file.type) {
+      case "pdf": return "PDF";
+      case "doc": return "DOC";
+      case "ppt": return "PPT";
+      case "text": return "TXT";
+      case "image": return "Image";
+      default: return "File";
+    }
   };
 
   // --- Generate AI Study Plan ---
@@ -193,13 +280,15 @@ export default function StudyPlanner() {
       dayTopics.forEach((topic, idx) => {
         const duration = 60 + (idx * 15);
         let xp = 20;
-        
+
         if (fileForDay) {
-          if (fileForDay.type === "document") xp += 10;
+          if (fileForDay.type === "pdf") xp += 12;
+          else if (fileForDay.type === "doc") xp += 10;
+          else if (fileForDay.type === "ppt") xp += 8;
           else if (fileForDay.type === "image") xp += 10;
-          else if (fileForDay.type === "voice") xp += 15;
+          else if (fileForDay.type === "text") xp += 5;
         }
-        
+
         xpTotal += xp;
 
         sessions.push({
@@ -210,10 +299,8 @@ export default function StudyPlanner() {
           time: idx === 0 ? "09:00" : idx === 1 ? "14:00" : "18:00",
           duration,
           completed: false,
-          source: fileForDay ? 
-            (fileForDay.type === "document" ? "PDF/Doc" : 
-             fileForDay.type === "image" ? "Image OCR" : "Voice Note") 
-            : "Manual",
+          source: fileForDay ? `${getFileTypeText(fileForDay)} Notes` : "Manual",
+          fileType: fileForDay?.type
         });
       });
     }
@@ -245,17 +332,29 @@ export default function StudyPlanner() {
     setNewExam({ subject: "", date: "", topics: "", files: [] });
 
     showToast(
-      "AI Plan Ready!",
-      `${sessions.length} study sessions created\n+${xpTotal} XP total`
+      "AI Study Plan Ready!",
+      `${sessions.length} study sessions created`
     );
   };
 
   const toggleSessionComplete = (id) => {
+    let durationToAdd = 0;
     setStudySessions(
-      studySessions.map((s) =>
-        s.id === id ? { ...s, completed: !s.completed } : s
-      )
+      studySessions.map((s) => {
+        if (s.id === id) {
+          durationToAdd = !s.completed ? (s.duration / 60) : -(s.duration / 60);
+          return { ...s, completed: !s.completed };
+        }
+        return s;
+      })
     );
+
+    if (durationToAdd !== 0) {
+      const currentHours = user?.studyTime ?? 0;
+      updateUser({ studyTime: Math.max(0, Math.round((currentHours + durationToAdd) * 10) / 10) });
+    }
+
+    recordActivity();
     showToast("Great!", "Session marked complete!");
   };
 
@@ -263,16 +362,6 @@ export default function StudyPlanner() {
 
   const todaysSessions = studySessions.filter((s) => s.date === format(new Date(), "yyyy-MM-dd"));
   const upcomingSessions = studySessions.filter((s) => s.date > format(new Date(), "yyyy-MM-dd"));
-
-  // Get appropriate icon for file type
-  const getFileIcon = (type) => {
-    switch(type) {
-      case "document": return "document";
-      case "image": return "image";
-      case "voice": return "mic";
-      default: return "document";
-    }
-  };
 
   // Responsive font sizes
   const fontSize = {
@@ -288,27 +377,34 @@ export default function StudyPlanner() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView 
-        style={styles.container} 
-        contentContainerStyle={styles.scroll}
+      <StatusBar
+        backgroundColor="transparent"
+        translucent={true}
+        barStyle="light-content"
+      />
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={[styles.scroll, { maxWidth: responsiveWidth, alignSelf: 'center', width: '100%' }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
         <View style={styles.header}>
-          <View style={styles.headerIcon}>
-            <Ionicons 
-              name="calendar" 
-              size={isTablet ? moderateScale(32) : moderateScale(24)} 
-              color="#fff" 
-            />
-          </View>
-          <View style={styles.headerText}>
-            <Text style={[styles.headerTitle, { fontSize: fontSize['3xl'] }]}>
-              AI Study Planner
-            </Text>
-            <Text style={[styles.headerSubtitle, { fontSize: fontSize.base }]}>
-              Upload notes → Get smart schedule
-            </Text>
+          <View style={[styles.headerInner, { maxWidth: responsiveWidth, alignSelf: 'center', width: '100%' }]}>
+            <View style={styles.headerIcon}>
+              <Ionicons
+                name="calendar"
+                size={isTablet ? moderateScale(32) : moderateScale(24)}
+                color={colors.white}
+              />
+            </View>
+            <View style={styles.headerText}>
+              <Text style={[styles.headerTitle, { fontSize: fontSize['3xl'] }]}>
+                AI Study Planner
+              </Text>
+              <Text style={[styles.headerSubtitle, { fontSize: fontSize.base }]}>
+                Upload PDF/DOC/PPT → Get smart schedule
+              </Text>
+            </View>
           </View>
         </View>
 
@@ -318,13 +414,13 @@ export default function StudyPlanner() {
             style={styles.addBtn}
             onPress={() => setIsAddExamOpen(true)}
           >
-            <Ionicons 
-              name="add" 
-              size={isTablet ? moderateScale(24) : moderateScale(20)} 
-              color="#fff" 
+            <Ionicons
+              name="add"
+              size={isTablet ? moderateScale(24) : moderateScale(20)}
+              color={colors.white}
             />
             <Text style={[styles.addBtnText, { fontSize: fontSize.lg }]}>
-              Plan New Exam
+              Study Schedule
             </Text>
           </TouchableOpacity>
 
@@ -352,10 +448,10 @@ export default function StudyPlanner() {
                           {exam.subject}
                         </Text>
                         {isUrgent && (
-                          <Ionicons 
-                            name="flame" 
-                            size={isTablet ? moderateScale(24) : moderateScale(20)} 
-                            color="#EF4444" 
+                          <Ionicons
+                            name="flame"
+                            size={isTablet ? moderateScale(24) : moderateScale(20)}
+                            color={colors.danger}
                           />
                         )}
                       </View>
@@ -366,15 +462,15 @@ export default function StudyPlanner() {
                         {exam.files.map((f, i) => (
                           <View key={i} style={styles.fileTag}>
                             <Ionicons
-                              name={getFileIcon(f.type)}
+                              name={getFileIcon(f)}
                               size={isTablet ? moderateScale(16) : moderateScale(14)}
-                              color="#6B21A8"
+                              color={colors.primary}
                             />
-                            <Text 
-                              style={[styles.fileTagText, { fontSize: fontSize.sm }]} 
+                            <Text
+                              style={[styles.fileTagText, { fontSize: fontSize.sm }]}
                               numberOfLines={1}
                             >
-                              {f.name.length > 15 ? f.name.substring(0, 12) + '...' : f.name}
+                              {getFileTypeText(f)}
                             </Text>
                           </View>
                         ))}
@@ -415,9 +511,9 @@ export default function StudyPlanner() {
                     </Text>
                     <View style={styles.sessionMeta}>
                       <Text style={[styles.meta, { fontSize: fontSize.sm }]}>
-                        <Ionicons 
-                          name="time-outline" 
-                          size={isTablet ? moderateScale(16) : moderateScale(14)} 
+                        <Ionicons
+                          name="time-outline"
+                          size={isTablet ? moderateScale(16) : moderateScale(14)}
                         /> {session.time}
                       </Text>
                       <Text style={[styles.meta, { fontSize: fontSize.sm }]}>
@@ -455,8 +551,8 @@ export default function StudyPlanner() {
                   <Text style={[styles.upcomingDate, { fontSize: fontSize.base }]}>
                     {format(new Date(s.date), "MMM d")}
                   </Text>
-                  <Text 
-                    style={[styles.upcomingTopic, { fontSize: fontSize.base }]} 
+                  <Text
+                    style={[styles.upcomingTopic, { fontSize: fontSize.base }]}
                     numberOfLines={1}
                   >
                     {s.topic}
@@ -472,32 +568,32 @@ export default function StudyPlanner() {
       </ScrollView>
 
       {/* Add Exam Modal */}
-      <Modal 
-        visible={isAddExamOpen} 
-        transparent 
+      <Modal
+        visible={isAddExamOpen}
+        transparent
         animationType="slide"
         statusBarTranslucent={true}
       >
-        <KeyboardAvoidingView 
+        <KeyboardAvoidingView
           style={styles.modalOverlay}
           behavior={Platform.OS === "ios" ? "padding" : "height"}
         >
-          <SafeAreaView style={styles.modalSafeArea}>
+          <SafeAreaView style={[styles.modalSafeArea, { maxWidth: responsiveWidth, alignSelf: 'center', width: '100%', overflow: 'hidden' }]}>
             <View style={styles.modal}>
               <View style={styles.modalHeader}>
                 <Text style={[styles.modalTitle, { fontSize: fontSize['2xl'] }]}>
                   Plan Exam with AI
                 </Text>
                 <TouchableOpacity onPress={() => setIsAddExamOpen(false)}>
-                  <Ionicons 
-                    name="close" 
-                    size={isTablet ? moderateScale(28) : moderateScale(24)} 
-                    color="#6B7280" 
+                  <Ionicons
+                    name="close"
+                    size={isTablet ? moderateScale(28) : moderateScale(24)}
+                    color={colors.subText}
                   />
                 </TouchableOpacity>
               </View>
 
-              <ScrollView 
+              <ScrollView
                 style={styles.modalBody}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.modalBodyContent}
@@ -511,7 +607,7 @@ export default function StudyPlanner() {
                     placeholder="e.g., Physics Final"
                     value={newExam.subject}
                     onChangeText={(t) => setNewExam({ ...newExam, subject: t })}
-                    placeholderTextColor="#9CA3AF"
+                    placeholderTextColor={colors.placeholder}
                   />
                 </View>
 
@@ -524,7 +620,7 @@ export default function StudyPlanner() {
                     placeholder="YYYY-MM-DD"
                     value={newExam.date}
                     onChangeText={(t) => setNewExam({ ...newExam, date: t })}
-                    placeholderTextColor="#9CA3AF"
+                    placeholderTextColor={colors.placeholder}
                   />
                 </View>
 
@@ -537,92 +633,101 @@ export default function StudyPlanner() {
                     placeholder="Mechanics, Waves, Thermodynamics"
                     value={newExam.topics}
                     onChangeText={(t) => setNewExam({ ...newExam, topics: t })}
-                    placeholderTextColor="#9CA3AF"
+                    placeholderTextColor={colors.placeholder}
                   />
                 </View>
 
                 <View style={styles.uploadSection}>
                   <Text style={[styles.label, { fontSize: fontSize.base }]}>
-                    Upload Notes, Docs, Images
+                    Upload Study Materials
                   </Text>
                   <View style={styles.uploadBtns}>
-                    <TouchableOpacity 
-                      style={styles.uploadBtn} 
+                    <TouchableOpacity
+                      style={styles.uploadBtn}
                       onPress={pickDocument}
-                      disabled={isRecording}
                     >
-                      <Ionicons 
-                        name="document-attach" 
-                        size={isTablet ? moderateScale(24) : moderateScale(20)} 
-                        color="#6B21A8" 
+                      <Ionicons
+                        name="document-attach"
+                        size={isTablet ? moderateScale(24) : moderateScale(20)}
+                        color={colors.primary}
                       />
                       <Text style={[styles.uploadBtnText, { fontSize: fontSize.sm }]}>
-                        PDF/Doc
+                        PDF/DOC/PPT
                       </Text>
                     </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={styles.uploadBtn} 
+                    <TouchableOpacity
+                      style={styles.uploadBtn}
+                      onPress={scanImage}
+                    >
+                      <Ionicons
+                        name="camera"
+                        size={isTablet ? moderateScale(24) : moderateScale(20)}
+                        color={colors.primary}
+                      />
+                      <Text style={[styles.uploadBtnText, { fontSize: fontSize.sm }]}>
+                        Scan
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.uploadBtn}
                       onPress={pickImage}
-                      disabled={isRecording}
                     >
-                      <Ionicons 
-                        name="image" 
-                        size={isTablet ? moderateScale(24) : moderateScale(20)} 
-                        color="#6B21A8" 
+                      <Ionicons
+                        name="image"
+                        size={isTablet ? moderateScale(24) : moderateScale(20)}
+                        color={colors.primary}
                       />
                       <Text style={[styles.uploadBtnText, { fontSize: fontSize.sm }]}>
-                        Image
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={[styles.uploadBtn, isRecording && styles.uploadBtnActive]}
-                      onPress={pickVoice}
-                      disabled={isRecording}
-                    >
-                      <Ionicons 
-                        name={isRecording ? "mic-circle" : "mic"} 
-                        size={isTablet ? moderateScale(24) : moderateScale(20)} 
-                        color={isRecording ? "#EF4444" : "#6B21A8"} 
-                      />
-                      <Text style={[styles.uploadBtnText, { fontSize: fontSize.sm }]}>
-                        {isRecording ? "Recording..." : "Voice"}
+                        Gallery
                       </Text>
                     </TouchableOpacity>
                   </View>
 
-                  {newExam.files.map((file, i) => (
-                    <View key={i} style={styles.fileItem}>
-                      <Ionicons
-                        name={getFileIcon(file.type)}
-                        size={isTablet ? moderateScale(22) : moderateScale(18)}
-                        color="#6B21A8"
-                      />
-                      <Text 
-                        style={[styles.fileName, { fontSize: fontSize.base }]} 
-                        numberOfLines={1}
-                      >
-                        {file.name}
+                  {newExam.files.length > 0 && (
+                    <View style={styles.filesList}>
+                      <Text style={[styles.filesTitle, { fontSize: fontSize.base }]}>
+                        Uploaded Files ({newExam.files.length})
                       </Text>
-                      <Text style={[styles.fileSize, { fontSize: fontSize.sm }]}>
-                        {file.size}
-                      </Text>
-                      <TouchableOpacity onPress={() => removeFile(i)}>
-                        <Ionicons 
-                          name="close-circle" 
-                          size={isTablet ? moderateScale(24) : moderateScale(20)} 
-                          color="#EF4444" 
-                        />
-                      </TouchableOpacity>
+                      {newExam.files.map((file, i) => (
+                        <View key={i} style={styles.fileItem}>
+                          <Ionicons
+                            name={getFileIcon(file)}
+                            size={isTablet ? moderateScale(22) : moderateScale(18)}
+                            color={colors.primary}
+                          />
+                          <View style={styles.fileInfo}>
+                            <Text
+                              style={[styles.fileName, { fontSize: fontSize.base }]}
+                              numberOfLines={1}
+                            >
+                              {file.name}
+                            </Text>
+                            <Text style={[styles.fileDetails, { fontSize: fontSize.sm }]}>
+                              {getFileTypeText(file)} • {file.size}
+                            </Text>
+                          </View>
+                          <TouchableOpacity
+                            style={styles.removeBtn}
+                            onPress={() => removeFile(i)}
+                          >
+                            <Ionicons
+                              name="close-circle"
+                              size={isTablet ? moderateScale(24) : moderateScale(20)}
+                              color={colors.danger}
+                            />
+                          </TouchableOpacity>
+                        </View>
+                      ))}
                     </View>
-                  ))}
+                  )}
                 </View>
               </ScrollView>
 
               <TouchableOpacity style={styles.generateBtn} onPress={generateStudyPlan}>
-                <Ionicons 
-                  name="sparkles" 
-                  size={isTablet ? moderateScale(24) : moderateScale(20)} 
-                  color="#fff" 
+                <Ionicons
+                  name="sparkles"
+                  size={isTablet ? moderateScale(24) : moderateScale(20)}
+                  color={colors.white}
                 />
                 <Text style={[styles.generateText, { fontSize: fontSize.lg }]}>
                   Generate AI Study Plan
@@ -630,40 +735,38 @@ export default function StudyPlanner() {
               </TouchableOpacity>
             </View>
           </SafeAreaView>
-        </KeyboardAvoidingView>
-      </Modal>
-    </SafeAreaView>
+        </KeyboardAvoidingView >
+      </Modal >
+    </SafeAreaView >
   );
 }
 
 // ✅ RESPONSIVE STYLESHEET
-const styles = StyleSheet.create({
+const getStyles = (colors, scale, verticalScale, moderateScale, isTablet) => StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#6B21A8',
+    backgroundColor: colors.primary,
     paddingTop: Platform.OS === 'android' ? 25 : 0,
   },
-  container: { 
-    flex: 1, 
-    backgroundColor: "#FAF5FF" 
+  container: {
+    flex: 1,
+    backgroundColor: colors.background
   },
-  scroll: { 
+  scroll: {
     paddingBottom: verticalScale(30),
   },
 
   // Header
   header: {
-    backgroundColor: "#6B21A8",
+    backgroundColor: colors.primary,
     paddingHorizontal: scale(20),
     paddingTop: verticalScale(isTablet ? 40 : 50),
     paddingBottom: verticalScale(isTablet ? 30 : 24),
-    flexDirection: "row",
-    alignItems: "center",
     borderBottomLeftRadius: scale(32),
     borderBottomRightRadius: scale(32),
     ...Platform.select({
       ios: {
-        shadowColor: "#6B21A8",
+        shadowColor: colors.primary,
         shadowOffset: { width: 0, height: verticalScale(4) },
         shadowOpacity: 0.3,
         shadowRadius: verticalScale(12),
@@ -673,10 +776,14 @@ const styles = StyleSheet.create({
       },
     }),
   },
+  headerInner: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
   headerIcon: {
     width: scale(48),
     height: scale(48),
-    backgroundColor: "rgba(255,255,255,0.2)",
+    backgroundColor: colors.overlay,
     borderRadius: scale(16),
     justifyContent: "center",
     alignItems: "center",
@@ -685,17 +792,17 @@ const styles = StyleSheet.create({
   headerText: {
     flex: 1,
   },
-  headerTitle: { 
-    fontWeight: "800", 
-    color: "#fff",
+  headerTitle: {
+    fontWeight: "800",
+    color: colors.white,
     marginBottom: verticalScale(2),
   },
-  headerSubtitle: { 
-    color: "#E9D5FF", 
-    marginTop: verticalScale(4) 
+  headerSubtitle: {
+    color: colors.white + "AA",
+    marginTop: verticalScale(4)
   },
 
-  content: { 
+  content: {
     paddingHorizontal: scale(20),
     paddingVertical: verticalScale(20),
   },
@@ -705,14 +812,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#6B21A8",
+    backgroundColor: colors.primary,
     paddingHorizontal: scale(20),
     paddingVertical: verticalScale(14),
     borderRadius: scale(20),
     marginBottom: verticalScale(20),
     ...Platform.select({
       ios: {
-        shadowColor: "#6B21A8",
+        shadowColor: colors.primary,
         shadowOffset: { width: 0, height: verticalScale(2) },
         shadowOpacity: 0.2,
         shadowRadius: verticalScale(8),
@@ -722,34 +829,34 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  addBtnText: { 
-    color: "#fff", 
+  addBtnText: {
+    color: colors.white,
     fontWeight: "700",
     marginLeft: scale(8),
   },
 
   // Section Titles
-  sectionTitle: { 
-    fontWeight: "700", 
-    color: "#1F2937", 
+  sectionTitle: {
+    fontWeight: "700",
+    color: colors.text,
     marginBottom: verticalScale(12),
     marginTop: verticalScale(8),
   },
 
   // Exams
-  examsList: { 
+  examsList: {
     marginBottom: verticalScale(24),
     gap: verticalScale(12),
   },
   examCard: {
-    backgroundColor: "#fff",
+    backgroundColor: colors.card,
     borderRadius: scale(16),
     padding: scale(16),
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: colors.border,
     ...Platform.select({
       ios: {
-        shadowColor: "#000",
+        shadowColor: colors.black,
         shadowOffset: { width: 0, height: verticalScale(2) },
         shadowOpacity: 0.05,
         shadowRadius: verticalScale(8),
@@ -759,180 +866,169 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  examUrgent: { 
-    borderColor: "#FECACA", 
-    backgroundColor: "#FEF2F2" 
+  examUrgent: {
+    borderColor: colors.danger,
+    backgroundColor: colors.danger + "10"
   },
-  examHeaderRow: { 
-    flexDirection: "row", 
-    justifyContent: "space-between", 
+  examHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
     marginBottom: verticalScale(4),
   },
-  examSubject: { 
-    fontWeight: "700", 
-    color: "#1F2937",
+  examSubject: {
+    fontWeight: "700",
+    color: colors.text,
     flex: 1,
   },
-  examDate: { 
-    color: "#6B7280", 
-    marginVertical: verticalScale(6) 
+  examDate: {
+    color: colors.subText,
+    marginVertical: verticalScale(6)
   },
-  fileTags: { 
-    flexDirection: "row", 
-    flexWrap: "wrap", 
-    gap: scale(6), 
-    marginTop: verticalScale(8) 
+  fileTags: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: scale(6),
+    marginTop: verticalScale(8)
   },
   fileTag: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F3E8FF",
+    backgroundColor: colors.primary + "15",
     paddingHorizontal: scale(8),
     paddingVertical: verticalScale(4),
     borderRadius: scale(12),
     maxWidth: scale(120),
   },
-  fileTagText: { 
-    color: "#6B21A8", 
+  fileTagText: {
+    color: colors.primary,
+    fontWeight: "600",
     marginLeft: scale(4),
-    flexShrink: 1,
   },
 
-  // Schedule Card
+  // Schedule
   scheduleCard: {
-    backgroundColor: "#fff",
+    backgroundColor: colors.card,
     borderRadius: scale(20),
-    padding: scale(16),
-    marginBottom: verticalScale(24),
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
+    padding: scale(20),
+    marginBottom: verticalScale(20),
     ...Platform.select({
       ios: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: verticalScale(2) },
+        shadowColor: colors.black,
+        shadowOffset: { width: 0, height: verticalScale(4) },
         shadowOpacity: 0.05,
-        shadowRadius: verticalScale(8),
+        shadowRadius: verticalScale(12),
       },
       android: {
-        elevation: 3,
+        elevation: 4,
       },
     }),
   },
-  cardHeader: { 
-    marginBottom: verticalScale(16),
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  cardTitle: { 
-    fontWeight: "700", 
-    color: "#1F2937" 
-  },
-  cardSubtitle: { 
-    color: "#6B7280" 
-  },
-  empty: { 
-    textAlign: "center", 
-    color: "#9CA3AF", 
-    padding: verticalScale(20),
-  },
-
-  // Session Items
-  sessionItem: {
-    backgroundColor: "#F8FAFC",
-    borderRadius: scale(16),
-    padding: scale(14),
-    marginBottom: verticalScale(10),
+  cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
+    marginBottom: verticalScale(16),
   },
-  sessionDone: { 
-    backgroundColor: "#F0FDF4", 
-    borderColor: "#BBF7D0" 
+  cardTitle: {
+    fontWeight: "700",
+    color: colors.text,
   },
-  sessionLeft: { 
+  cardSubtitle: {
+    color: colors.subText,
+    fontWeight: "600",
+  },
+  empty: {
+    textAlign: "center",
+    color: colors.placeholder,
+    marginVertical: verticalScale(20),
+    fontStyle: "italic",
+  },
+  sessionItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: verticalScale(12),
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  sessionDone: {
+    opacity: 0.5,
+  },
+  sessionLeft: {
     flex: 1,
     marginRight: scale(12),
   },
-  sessionTopic: { 
-    fontWeight: "600", 
-    color: "#1F2937",
-    marginBottom: verticalScale(2),
+  sessionTopic: {
+    fontWeight: "600",
+    color: colors.text,
+    marginBottom: verticalScale(4),
   },
-  sessionMeta: { 
-    flexDirection: "row", 
-    gap: scale(10), 
-    flexWrap: 'wrap',
+  sessionMeta: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: scale(8),
   },
-  meta: { 
-    color: "#6B7280",
-    flexDirection: 'row',
-    alignItems: 'center',
+  meta: {
+    color: colors.subText,
   },
   completeBtn: {
-    backgroundColor: "#6B21A8",
-    paddingHorizontal: scale(16),
-    paddingVertical: verticalScale(8),
-    borderRadius: scale(12),
-    minWidth: scale(70),
+    backgroundColor: colors.background,
+    paddingHorizontal: scale(12),
+    paddingVertical: verticalScale(6),
+    borderRadius: scale(8),
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  completeBtnDone: { 
-    backgroundColor: "#10B981" 
+  completeBtnDone: {
+    backgroundColor: colors.success + "20",
+    borderColor: colors.success,
   },
-  completeText: { 
-    color: "#fff", 
+  completeText: {
     fontWeight: "600",
-    textAlign: 'center',
+    color: colors.primary,
   },
 
-  // Upcoming Items
+  // Upcoming
   upcomingItem: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "#fff",
     padding: scale(12),
+    backgroundColor: colors.card + "80", // slightly transparent or just card color
     borderRadius: scale(12),
     marginBottom: verticalScale(8),
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
   },
-  upcomingDate: { 
-    fontWeight: "600", 
-    color: "#6B21A8",
-    minWidth: scale(60),
+  upcomingDate: {
+    fontWeight: "700",
+    color: colors.primary,
+    width: scale(60),
   },
-  upcomingTopic: { 
-    color: "#1F2937", 
-    flex: 1, 
-    marginHorizontal: scale(10),
+  upcomingTopic: {
+    flex: 1,
+    color: colors.text,
+    marginHorizontal: scale(8),
   },
-  upcomingTime: { 
-    color: "#6B7280",
-    minWidth: scale(50),
-    textAlign: 'right',
+  upcomingTime: {
+    color: colors.subText,
   },
 
   // Modal
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: colors.overlay,
     justifyContent: "flex-end",
   },
   modalSafeArea: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  modal: {
-    backgroundColor: "#fff",
+    backgroundColor: colors.card,
     borderTopLeftRadius: scale(24),
     borderTopRightRadius: scale(24),
-    maxHeight: '90%',
-    paddingBottom: Platform.OS === 'ios' ? verticalScale(30) : verticalScale(20),
+    height: isTablet ? "80%" : "90%",
+    marginTop: isTablet ? "10%" : "0%",
+  },
+  modal: {
+    flex: 1,
+    backgroundColor: colors.card,
+    borderTopLeftRadius: scale(24),
+    borderTopRightRadius: scale(24),
   },
   modalHeader: {
     flexDirection: "row",
@@ -940,104 +1036,116 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: scale(20),
     borderBottomWidth: 1,
-    borderColor: "#E5E7EB",
+    borderBottomColor: colors.border,
   },
-  modalTitle: { 
-    fontWeight: "700", 
-    color: "#1F2937" 
+  modalTitle: {
+    fontWeight: "700",
+    color: colors.text,
   },
   modalBody: {
-    paddingHorizontal: scale(20),
-    maxHeight: Dimensions.get('window').height * 0.55,
+    flex: 1,
   },
   modalBodyContent: {
-    paddingTop: verticalScale(20),
-    paddingBottom: verticalScale(20),
+    padding: scale(20),
   },
-
-  // Inputs
-  inputGroup: { 
-    marginBottom: verticalScale(16) 
+  inputGroup: {
+    marginBottom: verticalScale(20),
   },
-  label: { 
-    fontWeight: "600", 
-    color: "#374151", 
-    marginBottom: verticalScale(8) 
+  label: {
+    fontWeight: "600",
+    color: colors.text,
+    marginBottom: verticalScale(8),
   },
   input: {
     borderWidth: 1,
-    borderColor: "#D1D5DB",
-    borderRadius: scale(16),
-    padding: scale(14),
-    backgroundColor: "#F9FAFB",
+    borderColor: colors.border,
+    borderRadius: scale(12),
+    padding: scale(12),
+    backgroundColor: colors.inputBackground,
+    color: colors.text,
   },
-
-  // Upload Section
-  uploadSection: { 
-    marginTop: verticalScale(10) 
+  uploadSection: {
+    marginTop: verticalScale(10),
+    marginBottom: verticalScale(20),
   },
-  uploadBtns: { 
-    flexDirection: "row", 
-    gap: scale(8), 
-    marginBottom: verticalScale(12),
-    flexWrap: 'wrap',
+  uploadBtns: {
+    flexDirection: "row",
+    gap: scale(12),
+    marginBottom: verticalScale(16),
   },
   uploadBtn: {
     flex: 1,
-    minWidth: scale(85),
-    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F3E8FF",
-    padding: scale(12),
-    borderRadius: scale(16),
-    marginBottom: verticalScale(4),
+    backgroundColor: colors.inputBackground,
+    paddingVertical: verticalScale(12),
+    borderRadius: scale(12),
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   uploadBtnActive: {
-    backgroundColor: "#FEE2E2",
+    borderColor: colors.danger,
+    backgroundColor: colors.danger + "15",
   },
-  uploadBtnText: { 
-    marginLeft: scale(6), 
-    color: "#6B21A8", 
+  uploadBtnText: {
     fontWeight: "600",
-    textAlign: 'center',
+    color: colors.text,
+    marginTop: verticalScale(4),
   },
-
-  // File Items
+  filesList: {
+    marginTop: verticalScale(10),
+  },
+  filesTitle: {
+    fontWeight: "600",
+    color: colors.text,
+    marginBottom: verticalScale(8),
+  },
   fileItem: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F8FAFC",
-    padding: scale(10),
+    backgroundColor: colors.inputBackground,
+    padding: scale(12),
     borderRadius: scale(12),
     marginBottom: verticalScale(8),
+    gap: scale(12),
   },
-  fileName: { 
-    flex: 1, 
-    marginLeft: scale(8), 
-    color: "#1F2937",
-    marginRight: scale(8),
+  fileInfo: {
+    flex: 1,
   },
-  fileSize: {
-    color: "#6B7280",
-    marginRight: scale(8),
+  fileName: {
+    color: colors.text,
+    fontWeight: "500",
   },
-
-  // Generate Button
+  fileDetails: {
+    color: colors.subText,
+    marginTop: verticalScale(2),
+  },
+  removeBtn: {
+    padding: scale(4),
+  },
   generateBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#6B21A8",
-    marginHorizontal: scale(20),
-    padding: scale(16),
-    borderRadius: scale(20),
-    marginTop: scale(8),
-    marginBottom: scale(10),
+    backgroundColor: colors.primary,
+    margin: scale(20),
+    paddingVertical: verticalScale(16),
+    borderRadius: scale(16),
+    gap: scale(8),
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 6,
+      },
+    }),
   },
-  generateText: { 
-    color: "#fff", 
-    fontWeight: "700", 
-    marginLeft: scale(8) 
+  generateText: {
+    fontWeight: "700",
+    color: colors.white,
   },
 });

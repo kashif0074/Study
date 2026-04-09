@@ -1,22 +1,44 @@
 // components/ui/card.js
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, StyleSheet } from "react-native";
+import { useAuth } from "../../context/AuthContext";
 
-export function Card({ children, style }) {
-  return <View style={[styles.card, style]}>{children}</View>;
-}
-export function CardHeader({ children }) {
-  return <View style={styles.header}>{children}</View>;
-}
-export function CardTitle({ children }) {
-  return <Text style={styles.title}>{children}</Text>;
-}
-export function CardContent({ children }) {
-  return <View style={styles.content}>{children}</View>;
-}
+export const Card = ({ children, style, ...props }) => {
+  const { colors } = useAuth();
+  const cardStyles = getCardStyles(colors);
+  return (
+    <View style={[cardStyles.card, { backgroundColor: colors.card, borderColor: colors.border }, style]} {...props}>
+      {children}
+    </View>
+  );
+};
+
+export const CardHeader = ({ children, style }) => (
+  <View style={[styles.header, style]}>{children}</View>
+);
+
+export const CardTitle = ({ children, style }) => (
+  <View style={[styles.titleContainer, style]}>{children}</View>
+);
+
+export const CardContent = ({ children, style }) => (
+  <View style={[styles.content, style]}>{children}</View>
+);
+
+const getCardStyles = (colors) => StyleSheet.create({
+  card: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 16,
+    shadowColor: colors.black,
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+});
+
 const styles = StyleSheet.create({
-  card: { backgroundColor: "#fff", borderRadius: 16, marginVertical: 8, elevation: 2, shadowColor: "#A78BFA", shadowOpacity: 0.06, shadowRadius: 6 },
-  header: { padding: 16, borderBottomWidth: 1, borderBottomColor: "#E5E7EB" },
-  title: { fontSize: 18, fontWeight: "700", color: "#1E1B4B" },
-  content: { padding: 16 },
+  header: { marginBottom: 12 },
+  titleContainer: { marginBottom: 4 },
+  content: {},
 });

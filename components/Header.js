@@ -1,14 +1,18 @@
 // components/Header.js
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
+import { useAuth } from "../context/AuthContext";
 
 export const Header = ({ title, subtitle, onBack, onAction }) => {
+  const { colors } = useAuth();
+  const styles = getStyles(colors);
+
   return (
     <View style={styles.container}>
       {onBack && (
         <TouchableOpacity style={styles.backBtn} onPress={onBack}>
-          <Ionicons name="arrow-back" size={24} color="#fff" />
+          <Ionicons name="arrow-back" size={24} color={colors.white} />
         </TouchableOpacity>
       )}
       <View style={styles.text}>
@@ -17,16 +21,16 @@ export const Header = ({ title, subtitle, onBack, onAction }) => {
       </View>
       {onAction && (
         <TouchableOpacity style={styles.actionBtn} onPress={onAction}>
-          <Ionicons name="add" size={28} color="#fff" />
+          <Ionicons name="add" size={28} color={colors.white} />
         </TouchableOpacity>
       )}
     </View>
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (colors) => StyleSheet.create({
   container: {
-    backgroundColor: "#6366F1",
+    backgroundColor: colors.primary,
     paddingTop: 50,
     paddingHorizontal: 20,
     paddingBottom: 20,
@@ -37,7 +41,7 @@ const styles = StyleSheet.create({
   },
   backBtn: { marginRight: 12 },
   text: { flex: 1 },
-  title: { fontSize: 24, fontWeight: "800", color: "#fff" },
-  subtitle: { fontSize: 14, color: "#E0E7FF", marginTop: 2 },
+  title: { fontSize: 24, fontWeight: "800", color: colors.white },
+  subtitle: { fontSize: 14, color: colors.accent, marginTop: 2 },
   actionBtn: { padding: 4 },
 });
