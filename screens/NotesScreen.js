@@ -318,34 +318,82 @@ export default function NotesScreen({ navigation }) {
         const content = selectedFile ? fileName : newNoteContent;
         const duration = selectedFile?.duration || "Not specified";
 
+        // Intelligent Type Detection
+        let detectedType = newNoteType;
+        if (selectedFile) {
+            const ext = fileName.split('.').pop().toLowerCase();
+            if (['pdf'].includes(ext)) detectedType = 'pdf';
+            else if (['ppt', 'pptx'].includes(ext)) detectedType = 'ppt';
+            else if (['doc', 'docx'].includes(ext)) detectedType = 'doc';
+            else if (['png', 'jpg', 'jpeg', 'gif'].includes(ext)) detectedType = 'image';
+            else if (['mp3', 'wav', 'm4a', 'aac'].includes(ext)) detectedType = 'voice';
+            else detectedType = 'file';
+        }
+
         const newNote = {
             userId: user?.uid || "guest_user",
             title: newNoteTitle,
             content: content,
-            type: newNoteType,
-            fileUrl: selectedFile?.uri || null, // Mapping fileUri to fileUrl for backend
-            subject: newNoteType === "text" ? "General" :
-                newNoteType === "Files" ? "Document" :
-                    newNoteType === "image" ? "Image" : "Voice"
+            type: detectedType,
+            fileUrl: selectedFile?.uri || null, 
+            subject: detectedType === "text" ? "General" :
+                    detectedType === "pdf" ? "Document" :
+                    detectedType === "image" ? "Image" : "Voice"
         };
 
-        // Send to backend
+        // Send to backend (Use FormData for files, JSON for text-only)
+        console.log("📤 Sending note to backend:", newNote);
+
+        let body;
+        let headers = {};
+
+        if (selectedFile) {
+            // Use FormData for file uploads
+            body = new FormData();
+            body.append('userId', newNote.userId);
+            body.append('title', newNote.title);
+            body.append('content', newNote.content);
+            body.append('type', newNote.type);
+            body.append('subject', newNote.subject);
+
+            // Append the actual file binary
+            body.append('file', {
+                uri: selectedFile.uri,
+                name: selectedFile.name || (newNote.type === 'voice' ? "recording.m4a" : "upload.file"),
+                type: selectedFile.mimeType || 
+                      (newNote.type === 'image' ? 'image/jpeg' : 
+                       newNote.type === 'voice' ? 'audio/m4a' : 'application/octet-stream')
+            });
+            // Headers are handled automatically by FormData
+        } else {
+            // Use JSON for text-only notes
+            body = JSON.stringify(newNote);
+            headers['Content-Type'] = 'application/json';
+        }
+
         fetch(CONFIG.API_URLS.NOTES, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newNote)
+            headers: headers,
+            body: body
         })
-        .then(response => response.json())
+        .then(async (response) => {
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.message || "Failed to save note");
+            }
+            return data;
+        })
         .then(data => {
             if (data.note) {
-                setNotes([data.note, ...notes]);
+                console.log("✅ Note saved successfully:", data.note);
+                setNotes(prevNotes => [data.note, ...prevNotes]);
                 updateUser({ notesCreated: (user?.notesCreated ?? 0) + 1 });
-                Alert.alert("Success", "Note saved to MongoDB!");
+                Alert.alert("Success", "Note and file uploaded to MongoDB!");
             }
         })
         .catch(error => {
-            console.error("Error saving note:", error);
-            Alert.alert("Error", "Could not connect to the server. Please check if your backend is running.");
+            console.error("❌ Error saving note:", error);
+            Alert.alert("Error", `Could not save note: ${error.message}`);
         });
         
         setModalVisible(false);

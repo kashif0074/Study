@@ -1,7 +1,25 @@
 // backend/routes/notes.js
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
+const path = require('path');
 const Note = require('../models/Note');
+
+// Configure Multer for File Storage
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, 'uploads/');
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, uniqueSuffix + path.extname(file.originalname));
+    }
+});
+
+const upload = multer({ 
+    storage: storage,
+    limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+});
 
 // ==================== GET ALL NOTES OF A USER ====================
 router.get('/', async (req, res) => {
@@ -23,22 +41,33 @@ router.get('/', async (req, res) => {
     }
 });
 
-// ==================== CREATE NEW NOTE ====================
-router.post('/', async (req, res) => {
+// ==================== CREATE NEW NOTE (WITH FILE UPLOAD) ====================
+router.post('/', upload.single('file'), async (req, res) => {
     try {
-        const { userId, title, content, type, fileUrl, subject } = req.body;
+        // Data comes from req.body (for fields) and req.file (for binary)
+        const { userId, title, content, type, subject } = req.body;
+        
         console.log(`📩 Incoming POST request: Saving note "${title}" for user ${userId}`);
 
-        if (!userId || !title || !content || !type) {
-            return res.status(400).json({ message: "userId, title, content and type are required" });
+        if (!userId || !title || (!content && !req.file) || !type) {
+            return res.status(400).json({ message: "userId, title, and type are required" });
+        }
+
+        // Generate full URL if a file was uploaded
+        let fileUrl = null;
+        if (req.file) {
+            // Note: In production, use your actual domain. 
+            // Here we use a relative path that the frontend will prepend with the server IP.
+            fileUrl = `/uploads/${req.file.filename}`;
+            console.log(`📎 File uploaded: ${fileUrl}`);
         }
 
         const newNote = new Note({
             userId,
             title: title.trim(),
-            content,
+            content: content || (req.file ? req.file.originalname : ""),
             type,
-            fileUrl: fileUrl || null,
+            fileUrl: fileUrl,
             subject: subject || "General"
         });
 

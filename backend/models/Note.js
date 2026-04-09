@@ -18,7 +18,7 @@ const noteSchema = new mongoose.Schema({
     },
     type: {
         type: String,
-        enum: ['text', 'pdf', 'image', 'voice'],
+        enum: ['text', 'pdf', 'image', 'voice', 'ppt', 'doc', 'file'],
         required: true
     },
     fileUrl: {

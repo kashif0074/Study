@@ -16,6 +16,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { Audio } from "expo-av";
 import { useAuth } from "../context/AuthContext";
+import CONFIG, { API_BASE_URL } from "../constants/config";
+import { Linking } from "react-native";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
@@ -31,10 +33,23 @@ export default function NoteDetailScreen() {
     const styles = getStyles(colors);
 
     // ✅ Get actual note data
-    const note = route.params?.note || {
-        id: "1", title: "Sample Note", content: "Sample content", type: "text",
-        date: "Today", subject: "General", duration: "N/A", progress: 0, fileUri: null
+    const note = route.params?.note || {};
+    
+    // Determine the full URL for files (prepend server IP if it's a relative path)
+    const getFullUrl = (url) => {
+        if (!url) return null;
+        if (url.startsWith('http') || url.startsWith('file://') || url.startsWith('content://')) {
+            return url;
+        }
+        
+        // Ensure relative paths like /uploads/.. are handled correctly
+        const baseUrl = API_BASE_URL.replace('/api', ''); // Get http://192.168.0.100:5000
+        const cleanUrl = url.startsWith('/') ? url : `/${url}`;
+        
+        return `${baseUrl}${cleanUrl}`;
     };
+
+    const fileUrl = getFullUrl(note.fileUrl || note.fileUri);
 
     const [sound, setSound] = useState(null);
     const [isPlaying, setIsPlaying] = useState(false);
@@ -48,28 +63,37 @@ export default function NoteDetailScreen() {
             : undefined;
     }, [sound]);
 
-    // ✅ Fixed voice playback
+    // ✅ Fixed voice playback using Stable Method
     const playVoiceNote = async () => {
-        if (note.type !== "voice" || !note.fileUri) return;
+        if (!fileUrl) {
+            Alert.alert("No Audio", "This note has no audio file attached.");
+            return;
+        }
 
         try {
-            const { sound: newSound } = await Audio.Sound.createAsync(
-                { uri: note.fileUri },
-                { shouldPlay: true }
-            );
-            setSound(newSound);
-            newSound.setOnPlaybackStatusUpdate(status => {
+            console.log("🎵 Stable Playback: Loading audio from:", fileUrl);
+            const soundObject = new Audio.Sound();
+            
+            soundObject.setOnPlaybackStatusUpdate(status => {
                 if (status.isLoaded) {
                     if (status.didJustFinish) {
-                        setSound(null);
                         setIsPlaying(false);
+                        setSound(null);
                     } else {
                         setIsPlaying(status.isPlaying);
                     }
                 }
             });
+
+            await soundObject.loadAsync(
+                { uri: fileUrl },
+                { shouldPlay: true, volume: 1.0 }
+            );
+            
+            setSound(soundObject);
         } catch (error) {
-            Alert.alert("Error", "Cannot play this voice note");
+            console.error("❌ Playback error:", error);
+            Alert.alert("Error", "Cannot play this voice note. Ensure it is a valid audio file.");
         }
     };
 
@@ -90,7 +114,11 @@ export default function NoteDetailScreen() {
                 Alert.alert("Share", `Sharing "${note.title}"`);
                 break;
             case "Download":
-                Alert.alert("Download", `Downloaded "${note.content.substring(0, 30)}..."`);
+                if (fileUrl) {
+                    Linking.openURL(fileUrl);
+                } else {
+                    Alert.alert("Download", `Downloaded "${note.content.substring(0, 30)}..."`);
+                }
                 break;
             case "Delete":
                 Alert.alert(
@@ -112,11 +140,32 @@ export default function NoteDetailScreen() {
                 return <Text style={[styles.contentText, { color: colors.subText }]}>{note.content}</Text>;
 
             case "pdf":
+            case "ppt":
+            case "doc":
+            case "file":
+                const isPdf = note.type === "pdf";
+                const isPpt = note.type === "ppt";
+                const isDoc = note.type === "doc";
+                
                 return (
                     <View style={styles.pdfPreview}>
-                        <Ionicons name="document-attach-outline" size={scale(80)} color={colors.danger} />
-                        <Text style={[styles.pdfText, { color: colors.subText }]}>📄 PDF Document</Text>
-                        <Text style={[styles.pdfFileName, { color: colors.danger }]}>{note.content}</Text>
+                        <Ionicons 
+                            name={isPdf ? "document-attach-outline" : isPpt ? "easel-outline" : "document-text-outline"} 
+                            size={scale(80)} 
+                            color={isPpt ? colors.warning : isDoc ? colors.info : colors.danger} 
+                        />
+                        <Text style={[styles.pdfText, { color: colors.subText }]}>
+                            {isPdf ? "📄 PDF Document" : isPpt ? "📊 Presentation" : isDoc ? "📝 Word Document" : "📁 Attached File"}
+                        </Text>
+                        <Text style={[styles.pdfFileName, { color: colors.subText }]}>{note.content}</Text>
+                        
+                        <TouchableOpacity 
+                            style={[styles.openFileBtn, { backgroundColor: colors.primary }]}
+                            onPress={() => fileUrl && Linking.openURL(fileUrl)}
+                        >
+                            <Ionicons name="eye-outline" size={scale(20)} color={colors.white} />
+                            <Text style={styles.openFileText}>View Document</Text>
+                        </TouchableOpacity>
                     </View>
                 );
 
@@ -124,9 +173,13 @@ export default function NoteDetailScreen() {
                 return (
                     <View style={styles.imageContainer}>
                         <Image
-                            source={{ uri: note.fileUri || `https://via.placeholder.com/400x300/${colors.primary.replace("#", "")}/FFFFFF?text=Image` }}
+                            source={{ uri: fileUrl || `https://via.placeholder.com/400x300/${colors.primary.replace("#", "")}/FFFFFF?text=Image` }}
                             style={styles.noteImage}
                             resizeMode="contain"
+                            onError={(e) => {
+                                console.error("🖼️ Image load error:", e.nativeEvent.error);
+                                console.log("🔗 Failed URL:", fileUrl);
+                            }}
                         />
                         <Text style={[styles.imageCaption, { color: colors.subText }]}>{note.content}</Text>
                     </View>
@@ -353,7 +406,25 @@ const getStyles = (colors) => StyleSheet.create({
     // Content Types
     pdfPreview: { alignItems: "center", paddingVertical: verticalScale(40) },
     pdfText: { fontSize: scale(16), color: colors.subText, marginTop: scale(16), textAlign: "center" },
-    pdfFileName: { fontSize: scale(14), color: colors.danger, fontWeight: "600", marginTop: scale(8) },
+    pdfFileName: { fontSize: scale(14), color: colors.subText, fontWeight: "600", marginTop: scale(8), marginBottom: scale(20) },
+    openFileBtn: {
+        flexDirection: "row",
+        alignItems: "center",
+        paddingHorizontal: scale(20),
+        paddingVertical: verticalScale(10),
+        borderRadius: scale(25),
+        elevation: 2,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+    },
+    openFileText: {
+        color: colors.white,
+        fontSize: scale(14),
+        fontWeight: "700",
+        marginLeft: scale(8),
+    },
 
     imageContainer: { alignItems: "center" },
     noteImage: {
