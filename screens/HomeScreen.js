@@ -17,8 +17,10 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useAuth } from "../context/AuthContext";
+import CONFIG from "../constants/config";
+import { Share as RNShare } from "react-native";
 
 // ----- Main Screen -----
 export default function HomeScreen() {
@@ -27,6 +29,8 @@ export default function HomeScreen() {
     const shimmerAnim = useRef(new Animated.Value(0)).current;
     const fabScale = useRef(new Animated.Value(1)).current;
     const [activeTab, setActiveTab] = useState("Recent");
+    const [recentNotes, setRecentNotes] = useState([]);
+    const [totalNotesCount, setTotalNotesCount] = useState(0);
     const { width, height } = useWindowDimensions();
 
     // Responsive calculations
@@ -55,6 +59,25 @@ export default function HomeScreen() {
             })
         ).start();
     }, []);
+
+    useFocusEffect(
+        React.useCallback(() => {
+            if (user && user.uid) {
+                fetch(`${CONFIG.API_URLS.NOTES}?userId=${user.uid}`)
+                    .then((res) => res.json())
+                    .then((data) => {
+                        if (Array.isArray(data)) {
+                            setRecentNotes(data.slice(0, 3));
+                            setTotalNotesCount(data.length);
+                        }
+                    })
+                    .catch((err) => console.error("Error fetching notes in home:", err));
+            } else {
+                setTotalNotesCount(0);
+                setRecentNotes([]);
+            }
+        }, [user])
+    );
 
     // Guest Mode: Trigger Auth Modal
     const requireLogin = (actionName = "this feature") => {
@@ -96,6 +119,22 @@ export default function HomeScreen() {
     const handleViewAll = () => {
         if (!requireLogin("view all notes")) return;
         navigation.navigate("Notes");
+    };
+
+    const handleShareNote = async (note) => {
+        if (!requireLogin("share note")) return;
+        try {
+            const shareOptions = {
+                title: note.title,
+                message: `${note.title}\n\n${note.content || ""}\n\nShared from StudySpark App`,
+            };
+            if (note.fileUrl || note.fileUri) {
+                shareOptions.url = note.fileUrl || note.fileUri;
+            }
+            await RNShare.share(shareOptions);
+        } catch (error) {
+            console.error("Share error:", error);
+        }
     };
 
     // Responsive Subcomponents
@@ -255,7 +294,7 @@ export default function HomeScreen() {
                     {/* Stats */}
                     <View style={styles.statsRow}>
                         <StatCard label="Study Streak" value={`${user?.studyStreak ?? 0} days`} color={colors.secondary} />
-                        <StatCard label="Notes Created" value={`${user?.notesCreated ?? 0}`} color={colors.primary} />
+                        <StatCard label="Notes Created" value={`${user ? totalNotesCount : 0}`} color={colors.primary} />
                         <StatCard label="Quiz Score" value={user?.quizScore ?? "0%"} color={colors.secondary} />
                         <StatCard label="Study Time" value={`${user?.studyTime ?? 0} hrs`} color={colors.accent} />
                     </View>
@@ -320,39 +359,63 @@ export default function HomeScreen() {
 
                     {activeTab === "Recent" && (
                         <>
-                            <RecentActivityCard
-                                type="PDF"
-                                subject="software Engineering"
-                                duration="2h 30m"
-                                title="Software Engineering"
-                                summary="Overview of Software Engineering, Use Case Diagram, and Class Diagram."
-                                progress={85}
-                                date="Dec 13, 2025"
-                                onContinue={handleContinue}
-                                onShare={() => requireLogin("share note") || console.log("Share")}
-                            />
-                            <RecentActivityCard
-                                type="Text"
-                                subject="Mathematics"
-                                duration="1h 45m"
-                                title="Advanced Calculus Integration"
-                                summary="Detailed analysis of integration techniques, substitution methods, and applications."
-                                progress={92}
-                                date="Dec 12, 2025"
-                                onContinue={handleContinue}
-                                onShare={() => requireLogin("share note") || console.log("Share")}
-                            />
-                            <RecentActivityCard
-                                type="Voice"
-                                subject="Auotomata"
-                                duration="3h 15m"
-                                title="Theory of Auotomata"
-                                summary="Lecture on Dfa and Nfa, finite Automata,pushdown Automat and Turning Automata."
-                                progress={67}
-                                date="Dec 11, 2025"
-                                onContinue={handleContinue}
-                                onShare={() => requireLogin("share note") || console.log("Share")}
-                            />
+                            {(user && user.uid && recentNotes.length > 0) ? (
+                                recentNotes.map((note, index) => (
+                                    <RecentActivityCard
+                                        key={note._id || index}
+                                        type={note.type === "pdf" ? "PDF" : note.type === "image" ? "Image" : note.type === "voice" ? "Voice" : "Text"}
+                                        subject={note.subject || "General"}
+                                        duration={note.duration || "N/A"}
+                                        title={note.title}
+                                        summary={note.content}
+                                        progress={note.progress || Math.floor(Math.random() * 40 + 60)}
+                                        date={note.createdAt ? new Date(note.createdAt).toLocaleDateString() : new Date().toLocaleDateString()}
+                                        onContinue={() => navigation.navigate("NoteDetail", { note })}
+                                        onShare={() => handleShareNote(note)}
+                                    />
+                                ))
+                            ) : (user && user.uid) ? (
+                                <View style={{ padding: 40, alignItems: "center" }}>
+                                    <Text style={{ fontSize: 16, color: theme.subText }}>No recent notes yet.</Text>
+                                    <Text style={{ fontSize: 14, color: theme.subText, marginTop: 8 }}>Create your first note to see it here!</Text>
+                                </View>
+                            ) : (
+                                <>
+                                    <RecentActivityCard
+                                        type="PDF"
+                                        subject="software Engineering"
+                                        duration="2h 30m"
+                                        title="Software Engineering"
+                                        summary="Overview of Software Engineering, Use Case Diagram, and Class Diagram."
+                                        progress={85}
+                                        date="Dec 13, 2025"
+                                        onContinue={handleContinue}
+                                        onShare={() => requireLogin("share note") || console.log("Share")}
+                                    />
+                                    <RecentActivityCard
+                                        type="Text"
+                                        subject="Mathematics"
+                                        duration="1h 45m"
+                                        title="Advanced Calculus Integration"
+                                        summary="Detailed analysis of integration techniques, substitution methods, and applications."
+                                        progress={92}
+                                        date="Dec 12, 2025"
+                                        onContinue={handleContinue}
+                                        onShare={() => requireLogin("share note") || console.log("Share")}
+                                    />
+                                    <RecentActivityCard
+                                        type="Voice"
+                                        subject="Auotomata"
+                                        duration="3h 15m"
+                                        title="Theory of Auotomata"
+                                        summary="Lecture on Dfa and Nfa, finite Automata,pushdown Automat and Turning Automata."
+                                        progress={67}
+                                        date="Dec 11, 2025"
+                                        onContinue={handleContinue}
+                                        onShare={() => requireLogin("share note") || console.log("Share")}
+                                    />
+                                </>
+                            )}
                         </>
                     )}
 

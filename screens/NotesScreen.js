@@ -1,5 +1,6 @@
 // screens/NotesScreen.js (COMPLETE & RESPONSIVE WITH AI FUNCTIONALITY)
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import {
     SafeAreaView,
     View,
@@ -105,9 +106,13 @@ export default function NotesScreen({ navigation }) {
                 useNativeDriver: true,
             })
         ).start();
+    }, []);
 
-        fetchNotes();
-    }, [user?.uid]);
+    useFocusEffect(
+        useCallback(() => {
+            fetchNotes();
+        }, [user?.uid])
+    );
 
     const fetchNotes = async () => {
         const userId = user?.uid || "guest_user";

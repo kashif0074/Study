@@ -11,6 +11,7 @@ import {
     Alert,
     Dimensions,
     StatusBar,
+    Share,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
@@ -105,13 +106,24 @@ export default function NoteDetailScreen() {
     };
 
     // ✅ All actions working
-    const handleAction = (action) => {
+    const handleAction = async (action) => {
         switch (action) {
             case "Continue":
                 Alert.alert("Continue", `Continued "${note.title}"`);
                 break;
             case "Share":
-                Alert.alert("Share", `Sharing "${note.title}"`);
+                try {
+                    const shareOptions = {
+                        title: note.title,
+                        message: `${note.title}\n\n${note.content || ""}\n\nShared from StudySpark App`,
+                    };
+                    if (fileUrl) {
+                        shareOptions.url = fileUrl;
+                    }
+                    await Share.share(shareOptions);
+                } catch (error) {
+                    Alert.alert("Error", "Could not share the note.");
+                }
                 break;
             case "Download":
                 if (fileUrl) {
@@ -123,10 +135,30 @@ export default function NoteDetailScreen() {
             case "Delete":
                 Alert.alert(
                     "Delete Note",
-                    `Delete "${note.title}"?`,
+                    `Are you sure you want to delete "${note.title}"?`,
                     [
                         { text: "Cancel", style: "cancel" },
-                        { text: "Delete", style: "destructive", onPress: () => navigation.goBack() }
+                        { 
+                            text: "Delete", 
+                            style: "destructive", 
+                            onPress: async () => {
+                                try {
+                                    if (note._id) {
+                                        const response = await fetch(`${CONFIG.API_URLS.NOTES}/${note._id}`, {
+                                            method: 'DELETE'
+                                        });
+                                        if (!response.ok) {
+                                            throw new Error("Failed to delete note from server");
+                                        }
+                                    }
+                                    Alert.alert("Deleted", "Note has been deleted.");
+                                    navigation.goBack();
+                                } catch (error) {
+                                    console.error("Delete error:", error);
+                                    Alert.alert("Error", "Failed to delete note.");
+                                }
+                            } 
+                        }
                     ]
                 );
                 break;
