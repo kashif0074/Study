@@ -18,9 +18,11 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
-import * as ImagePicker from "expo-image-picker";
 import * as Speech from "expo-speech";
+import * as ImagePicker from "expo-image-picker";
+import * as FileSystem from 'expo-file-system/legacy';
 import { useAuth } from "../context/AuthContext";
+import { askGemini } from "../constants/gemini";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const isTablet = screenWidth >= 768;
@@ -191,23 +193,6 @@ export default function AITools({ route, notes = [] }) {
 
                 setUploadedFiles(prev => [...prev, ...newFiles]);
 
-                let extractedText = `📁 Uploaded ${newFiles.length} file(s):\n\n`;
-                newFiles.forEach((file, index) => {
-                    extractedText += `${index + 1}. ${file.name} (${file.type})\n`;
-                    if (file.type === "PDF") {
-                        extractedText += `   📄 PDF Content: Advanced study techniques include active recall, spaced repetition, and the Feynman technique. Key principles: deliberate practice, consistent review, understanding > memorization.\n\n`;
-                    } else if (file.type === "DOC") {
-                        extractedText += `   📝 DOC Content: Document notes: Effective learning requires structured approach. Break complex topics into manageable chunks. Use visual aids like mind maps.\n\n`;
-                    } else if (file.type === "PPT") {
-                        extractedText += `   📊 PPT Content: Presentation slides: Key points - 1) Active learning beats passive 2) Spaced repetition 3) Interleaving topics 4) Self-testing 5) Elaborative interrogation.\n\n`;
-                    } else {
-                        extractedText += `   📄 Document content extracted for AI processing.\n\n`;
-                    }
-                });
-
-                extractedText += `AI will analyze all uploaded files to generate summaries and quizzes.`;
-                setInputText(extractedText);
-
                 if (newFiles.length === 1) {
                     showToast("✅ File Uploaded", `${newFiles[0].name} ready for AI processing!`);
                 } else {
@@ -238,15 +223,7 @@ export default function AITools({ route, notes = [] }) {
     };
 
     const startVoiceNote = async () => {
-        showToast("🎙️ Recording", "Listening... (3s simulation)");
-        setIsGenerating(true);
-
-        setTimeout(() => {
-            const voiceText = `🎙️ Voice transcribed: "Mastery requires active recall daily. Break complex topics into chunks. Use spaced repetition. Practice > Theory. Teach to learn."`;
-            setInputText(voiceText);
-            setIsGenerating(false);
-            showToast("✅ Voice Ready", "Perfect transcription complete!");
-        }, 3000);
+        showToast("🎙️ Speech-to-Text Not Native", "App currently only supports uploading voice files for Gemini.");
     };
 
     const pickVoiceFile = async () => {
@@ -265,7 +242,8 @@ export default function AITools({ route, notes = [] }) {
                     icon: "mic",
                     color: colors.success,
                     size: file.size ? `${Math.round(file.size / 1024)} KB` : 'Unknown',
-                    uri: file.uri
+                    uri: file.uri,
+                    mimeType: file.mimeType || "audio/mpeg"
                 };
                 setUploadedFiles(prev => [...prev, newFile]);
                 showToast("✅ Audio Uploaded", `${file.name} ready for analysis`);
@@ -334,24 +312,19 @@ export default function AITools({ route, notes = [] }) {
     };
 
     const processImage = (asset) => {
-        showToast("🖼️ OCR Processing", "Extracting text from image...");
-        setTimeout(() => {
-            const ocrText = `🖼️ OCR extracted: "Handwritten notes: Mind maps → central idea + branches. Flashcards → Q&A format. Pomodoro → 25min focus. Active recall testing."`;
-            setInputText(ocrText);
-            showToast("✅ OCR Complete", "Text extracted successfully!");
-
-            const newFile = {
-                id: Date.now(),
-                name: asset.fileName || "Scanned Image",
-                type: "IMAGE",
-                icon: "image",
-                color: colors.primary,
-                size: asset.fileSize ? `${Math.round(asset.fileSize / 1024)} KB` : 'Unknown',
-                uri: asset.uri
-            };
-            setUploadedFiles(prev => [...prev, newFile]);
-
-        }, 2500);
+        showToast("🖼️ Image Added", "Image ready for Gemini OCR processing.");
+        
+        const newFile = {
+            id: Date.now(),
+            name: asset.fileName || "Scanned Image",
+            type: "IMAGE",
+            icon: "image",
+            color: colors.primary,
+            size: asset.fileSize ? `${Math.round(asset.fileSize / 1024)} KB` : 'Unknown',
+            uri: asset.uri,
+            mimeType: asset.mimeType || "image/jpeg"
+        };
+        setUploadedFiles(prev => [...prev, newFile]);
     };
 
     const speakSummary = async () => {
@@ -375,47 +348,56 @@ export default function AITools({ route, notes = [] }) {
     };
 
     const handleSummarize = async () => {
-        if (!inputText.trim()) {
-            showToast("❌ No Content", "Upload or type content first");
+        if (!inputText.trim() && uploadedFiles.length === 0) {
+            showToast("❌ No Content", "Upload files or type content first");
             return;
         }
 
         setIsGenerating(true);
         setSummary("");
 
-        setTimeout(() => {
-            const source = inputText.includes("📁") ? "Files" :
-                inputText.includes("🎙️") ? "Voice" :
-                    inputText.includes("🖼️") ? "Image" :
-                        route?.params?.noteTitle ? "Note" : "Manual";
+        try {
+            // Convert files to base64 inlineData format
+            const filesToSend = [];
+            for (const file of uploadedFiles) {
+                // Ignore unsupported files
+                if (file.type === "DOC" || file.type === "PPT") {
+                    showToast("⚠️ Note", `${file.name} is a format not supported directly by this AI model yet. Skipping it.`);
+                    continue;
+                }
 
-            let fileTypes = "";
-            if (uploadedFiles.length > 0) {
-                const types = [...new Set(uploadedFiles.map(f => f.type))];
-                fileTypes = types.join("/");
+                try {
+                    const base64 = await FileSystem.readAsStringAsync(file.uri, { encoding: 'base64' });
+                    filesToSend.push({
+                        mimeType: file.mimeType || 'application/pdf',
+                        base64: base64
+                    });
+                } catch(e) {
+                    console.error("Failed to read file", file.name, e);
+                }
             }
 
-            const mockSummary = `🤖 AI Summary (${source}${fileTypes ? `: ${fileTypes}` : ''})
-        
-**Key Insights:**
-• Active recall > passive reading
-• Spaced repetition builds retention
-• Break complex topics into chunks  
-• Deliberate practice daily
-• Teach concepts to solidify learning
+            const prompt = `You are an expert academic tutor. Provide a precise, well-structured summary. 
+            Highlight the key concepts, main take-away points, and any important definitions using bullet points. 
+            Format the output beautifully for a mobile app screen using markdown.
 
-**Based on:**
-${uploadedFiles.map(f => `  • ${f.name} (${f.type})`).join('\n') || 'Manual content'}`;
+            Content to summarize:
+            ${inputText}`;
 
-            setSummary(mockSummary);
-            setIsGenerating(false);
+            const responseText = await askGemini(prompt, filesToSend);
+            setSummary(responseText);
             showToast("✅ Summary Ready!", "AI has analyzed your content.");
-        }, 2200);
+        } catch (error) {
+            console.error("AI Summarize Error:", error);
+            showToast("❌ AI Error", "Failed to generate summary. Please check your connection.");
+        } finally {
+            setIsGenerating(false);
+        }
     };
 
     const handleGenerateQuiz = async () => {
-        if (!inputText.trim()) {
-            showToast("❌ No Content", "Add content first");
+        if (!inputText.trim() && uploadedFiles.length === 0) {
+            showToast("❌ No Content", "Upload files or add text first");
             return;
         }
 
@@ -424,37 +406,47 @@ ${uploadedFiles.map(f => `  • ${f.name} (${f.type})`).join('\n') || 'Manual co
         setShowResults(false);
         setQuizAnswers({});
 
-        setTimeout(() => {
-            const pool = [
-                { id: 1, question: "Most effective study method?", options: ["Rereading", "Active recall", "Highlighting", "Summarizing"], correct: 1 },
-                { id: 2, question: "Handle complex topics by?", options: ["Skipping", "Chunking", "Memorizing", "Googling"], correct: 1 },
-                { id: 3, question: "Long-term retention uses?", options: ["Cramming", "Spaced repetition", "One-time review", "Group study"], correct: 1 },
-                { id: 4, question: "True mastery confirmed by?", options: ["Notes volume", "Exam score", "Familiarity", "Teaching others"], correct: 3 },
-                { id: 5, question: "Pomodoro technique suggests working for?", options: ["10 mins", "25 mins", "60 mins", "2 hours"], correct: 1 },
-                { id: 6, question: "Visual learners prefer using?", options: ["Podcasts", "Mind maps", "Reading aloud", "Flashcards"], correct: 1 },
-                { id: 7, question: "The 'Feynman Technique' involves?", options: ["Cramming", "Teaching a child", "Mind mapping", "Sleep learning"], correct: 1 },
-                { id: 8, question: "Best time to review new information?", options: ["After 1 week", "Within 24 hours", "Before the exam", "Never"], correct: 1 },
-                { id: 9, question: "Sleep deprivation affects learning by?", options: ["Improving focus", "Impairing memory", "Increasing speed", "No effect"], correct: 1 },
-                { id: 10, question: "An acronym is a form of?", options: ["Mnemonic device", "Note taking", "Summary", "Quiz"], correct: 0 },
-                { id: 11, question: "Active recall is best paired with?", options: ["Cramming", "Spaced repetition", "Highlighting", "Dictation"], correct: 1 },
-                { id: 12, question: "Interleaving study means?", options: ["One topic long", "Mixing different topics", "Reading same page twice", "Watching videos"], correct: 1 },
-                { id: 13, question: "Metacognition is defined as?", options: ["Deep sleep", "Thinking about thinking", "Fast reading", "Memory loss"], correct: 1 },
-                { id: 14, question: "Blurting method involves?", options: ["Highlighting everything", "Writing everything from memory", "Reading out loud", "Copying notes"], correct: 1 },
-                { id: 15, question: "Study environment should ideally be?", options: ["Noisy", "Consistent & quiet", "Dark", "In bed"], correct: 1 },
-                { id: 16, question: "Hydration improves?", options: ["Vocabulary", "Cognitive function", "Handwriting", "Spelling"], correct: 1 },
-                { id: 17, question: "Taking breaks helps prevent?", options: ["Retention", "Decision fatigue", "Hunger", "Creativity"], correct: 1 },
-                { id: 18, question: "Digital notes are better for?", options: ["Memory", "Searchability & organization", "Focus", "Eye health"], correct: 1 },
-                { id: 19, question: "Self-testing is a form of?", options: ["Passive learning", "Retrieval practice", "Time wasting", "Reviewing"], correct: 1 },
-                { id: 20, question: "Color coding notes helps with?", options: ["Speed", "Categorization", "Vocabulary", "Spelling"], correct: 1 },
-            ];
+        try {
+            // Convert files
+            const filesToSend = [];
+            for (const file of uploadedFiles) {
+                if (file.type === "DOC" || file.type === "PPT") continue;
+                try {
+                    const base64 = await FileSystem.readAsStringAsync(file.uri, { encoding: 'base64' });
+                    filesToSend.push({
+                        mimeType: file.mimeType || 'application/pdf',
+                        base64: base64
+                    });
+                } catch(e) {}
+            }
 
-            // Select numQuestions from the pool
-            const mockQuiz = pool.slice(0, numQuestions);
+            const prompt = `Generate a ${numQuestions}-question multiple-choice quiz based on the provided material or content. 
+            You must return a valid JSON array of objects. Each object must have:
+            - "id": a unique number
+            - "question": the question string
+            - "options": an array of exactly 4 strings
+            - "correct": a number (0-3) representing the index of the correct option in the "options" array.
 
-            setQuiz(mockQuiz);
+            Ensure the questions are challenging and cover the most important parts of the text.
+            Do not include any text, markdown formatting, or explanations outside of the JSON array.
+
+            Content:
+            ${inputText}`;
+
+            const questions = await askGemini(prompt, filesToSend, true);
+            
+            if (Array.isArray(questions)) {
+                setQuiz(questions);
+                showToast("✅ Quiz Generated!", `${questions.length} questions ready for you!`);
+            } else {
+                throw new Error("Invalid response format from AI");
+            }
+        } catch (error) {
+            console.error("AI Quiz Error:", error);
+            showToast("❌ AI Error", "Failed to generate quiz. Please try again.");
+        } finally {
             setIsGenerating(false);
-            showToast("✅ Quiz Generated!", `${numQuestions} questions ready for you!`);
-        }, 2500);
+        }
     };
 
     const checkAnswers = () => {
@@ -632,7 +624,11 @@ ${uploadedFiles.map(f => `  • ${f.name} (${f.type})`).join('\n') || 'Manual co
                                 styles={styles}
                                 isTablet={isTablet}
                             />
-                            <TouchableOpacity style={[styles.actionBtn, (isGenerating || !inputText.trim()) && styles.actionBtnDisabled]} onPress={handleSummarize} disabled={isGenerating || !inputText.trim()}>
+                            <TouchableOpacity 
+                                style={[styles.actionBtn, (isGenerating || (!inputText.trim() && uploadedFiles.length === 0)) && styles.actionBtnDisabled]} 
+                                onPress={handleSummarize} 
+                                disabled={isGenerating || (!inputText.trim() && uploadedFiles.length === 0)}
+                            >
                                 {isGenerating ? <ActivityIndicator size="small" color={colors.white} /> : <Ionicons name="sparkles" size={scale(20)} color={colors.white} />}
                                 <Text style={styles.actionBtnText}>{isGenerating ? "Generating..." : " Generate Summary"}</Text>
                             </TouchableOpacity>
@@ -671,12 +667,16 @@ ${uploadedFiles.map(f => `  • ${f.name} (${f.type})`).join('\n') || 'Manual co
                                 styles={styles}
                                 isTablet={isTablet}
                             />
-                            <TouchableOpacity style={[styles.actionBtn, (isGenerating || !inputText.trim()) && styles.actionBtnDisabled]} onPress={handleGenerateQuiz} disabled={isGenerating || !inputText.trim()}>
+                            <TouchableOpacity 
+                                style={[styles.actionBtn, (isGenerating || (!inputText.trim() && uploadedFiles.length === 0)) && styles.actionBtnDisabled]} 
+                                onPress={handleGenerateQuiz} 
+                                disabled={isGenerating || (!inputText.trim() && uploadedFiles.length === 0)}
+                            >
                                 {isGenerating ? <ActivityIndicator size="small" color={colors.white} /> : <Ionicons name="bulb" size={scale(20)} color={colors.white} />}
                                 <Text style={styles.actionBtnText}>{isGenerating ? "Creating..." : "Generate Quiz"}</Text>
                             </TouchableOpacity>
 
-                            {!isGenerating && quiz.length === 0 && inputText.trim() && (
+                            {!isGenerating && quiz.length === 0 && (inputText.trim() || uploadedFiles.length > 0) && (
                                 <View style={styles.numSelector}>
                                     <Text style={styles.selectorLabel}>Questions:</Text>
                                     {[5, 10, 15].map(num => (

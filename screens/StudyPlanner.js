@@ -1,5 +1,5 @@
 // screens/StudyPlanner.js (UPDATED FOR PDF/DOC/PPT FILES)
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -19,9 +19,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { format, differenceInDays } from "date-fns";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
+import * as FileSystem from 'expo-file-system/legacy';
 import { useAuth } from "../context/AuthContext";
+import { askGemini } from "../constants/gemini";
+import CONFIG from "../constants/config";
 
-export default function StudyPlanner() {
+export default function StudyPlanner({ navigation }) {
   const { user, updateUser, colors, recordActivity } = useAuth();
   const { width, height } = useWindowDimensions();
 
@@ -55,6 +58,47 @@ export default function StudyPlanner() {
     topics: "",
     files: [],
   });
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Fetch plan on mount
+  useEffect(() => {
+    const fetchStudyPlan = async () => {
+      try {
+        const userId = user?.uid || "guest_user";
+
+        const response = await fetch(`${CONFIG.API_URLS.STUDY_PLANS}?userId=${userId}`);
+        if (response.ok) {
+          const data = await response.json();
+          setExams(data.exams || []);
+          setStudySessions(data.studySessions || []);
+        }
+      } catch (err) {
+        console.error("Error fetching study plan:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchStudyPlan();
+  }, [user?.uid]);
+
+  // Sync plan to backend
+  const syncStudyPlan = async (updatedExams, updatedSessions) => {
+    try {
+      const userId = user?.uid || "guest_user";
+
+      await fetch(CONFIG.API_URLS.STUDY_PLANS, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          exams: updatedExams,
+          studySessions: updatedSessions
+        })
+      });
+    } catch (err) {
+      console.error("Error syncing study plan:", err);
+    }
+  };
 
   const showToast = (title, message) => {
     Alert.alert(title, message, [{ text: "OK" }]);
@@ -236,18 +280,18 @@ export default function StudyPlanner() {
   };
 
   // --- Generate AI Study Plan ---
-  const generateStudyPlan = () => {
+  const generateStudyPlan = async () => {
     if (!newExam.subject || !newExam.date) {
       showToast("Error", "Subject and date are required");
       return;
     }
 
-    const topics = newExam.topics
+    const topicsInput = newExam.topics
       .split(",")
       .map((t) => t.trim())
       .filter((t) => t);
 
-    if (topics.length === 0) {
+    if (topicsInput.length === 0) {
       showToast("Error", "Add at least one topic");
       return;
     }
@@ -261,93 +305,108 @@ export default function StudyPlanner() {
       return;
     }
 
-    // AI Study Plan Generation
-    const sessions = [];
-    const totalStudyDays = Math.min(daysUntilExam, 14);
-    const sessionsPerDay = Math.ceil(topics.length / totalStudyDays);
+    showToast("Designing Plan...", "AI is organizing your study schedule...");
 
-    let sessionId = 1;
-    let xpTotal = 0;
+    try {
+      const prompt = `You are an expert academic planner. Create a strategic study schedule for a student.
+      Subject: ${newExam.subject}
+      Days until exam: ${daysUntilExam}
+      Topics to cover: ${topicsInput.join(", ")}
 
-    for (let i = 0; i < totalStudyDays; i++) {
-      const currentDate = new Date(today);
-      currentDate.setDate(today.getDate() + i + 1);
-      const dateStr = format(currentDate, "yyyy-MM-dd");
+      Return a valid JSON array of session objects. Each object MUST have:
+      - "topic": The specific topic or sub-topic to focus on.
+      - "date": Date in "YYYY-MM-DD" format. You must space these out starting from today, and filling up the days exactly up until the exam date (${format(examDate, 'yyyy-MM-dd')}). Do not stop early.
+      - "time": Suggested start time in "HH:MM" (24h format).
+      - "duration": Duration in minutes (e.g., 60, 90, 120).
 
-      const dayTopics = topics.slice(i * sessionsPerDay, (i + 1) * sessionsPerDay);
-      const fileForDay = newExam.files[i % newExam.files.length];
+      Rules:
+      1. Distribute study tasks logically to avoid burnout.
+      2. Prioritize harder topics or fundamental ones first.
+      3. Use any provided file context to accurately weight the duration and focus of topics.
+      4. Do not include any text or markdown outside of the JSON array.
 
-      dayTopics.forEach((topic, idx) => {
-        const duration = 60 + (idx * 15);
-        let xp = 20;
+      JSON Output:`;
 
-        if (fileForDay) {
-          if (fileForDay.type === "pdf") xp += 12;
-          else if (fileForDay.type === "doc") xp += 10;
-          else if (fileForDay.type === "ppt") xp += 8;
-          else if (fileForDay.type === "image") xp += 10;
-          else if (fileForDay.type === "text") xp += 5;
+      // Convert files
+      const filesToSend = [];
+      for (const file of newExam.files) {
+        if (file.type === "doc" || file.type === "ppt") {
+            showToast("⚠️ Note", `${file.name} is a format not supported directly by AI. Skipping it for AI context.`);
+            continue;
         }
+        try {
+            const base64 = await FileSystem.readAsStringAsync(file.uri, { encoding: 'base64' });
+            filesToSend.push({
+                mimeType: file.mimeType || 'application/pdf',
+                base64: base64
+            });
+        } catch(e) {
+            console.error("File read error in planner:", e);
+        }
+      }
 
-        xpTotal += xp;
+      const aiSessions = await askGemini(prompt, filesToSend, true);
 
-        sessions.push({
+      if (!Array.isArray(aiSessions)) {
+        throw new Error("Invalid schedule format from AI");
+      }
+
+      // Map AI sessions into our app's internal format
+      let sessionId = Date.now();
+      const formattedSessions = aiSessions.map((s, index) => {
+        const fileForDay = newExam.files[index % newExam.files.length];
+        return {
           id: sessionId++,
           subject: newExam.subject,
-          topic: topic,
-          date: dateStr,
-          time: idx === 0 ? "09:00" : idx === 1 ? "14:00" : "18:00",
-          duration,
+          topic: s.topic,
+          date: s.date,
+          time: s.time,
+          duration: s.duration || 60,
           completed: false,
-          source: fileForDay ? `${getFileTypeText(fileForDay)} Notes` : "Manual",
+          source: fileForDay ? `${getFileTypeText(fileForDay)} Notes` : "AI Suggestion",
           fileType: fileForDay?.type
-        });
+        };
       });
+
+      const newExamEntry = {
+        id: Date.now().toString(),
+        subject: newExam.subject,
+        date: newExam.date,
+        topics: topicsInput,
+        priority: daysUntilExam <= 5 ? "high" : daysUntilExam <= 10 ? "medium" : "low",
+        files: newExam.files,
+      };
+
+      const updatedExams = [...exams, newExamEntry];
+      const updatedSessions = [...studySessions, ...formattedSessions];
+      setExams(updatedExams);
+      setStudySessions(updatedSessions);
+      syncStudyPlan(updatedExams, updatedSessions);
+      setIsAddExamOpen(false);
+      setNewExam({ subject: "", date: "", topics: "", files: [] });
+
+      showToast(
+        "AI Study Plan Ready!",
+        `${formattedSessions.length} sessions strategically planned by AI`
+      );
+    } catch (error) {
+      console.error("AI Planner Error:", error);
+      showToast("AI Error", "Failed to design plan. Please try again.");
     }
-
-    // Add final review
-    sessions.push({
-      id: sessionId++,
-      subject: newExam.subject,
-      topic: "Full Revision + Mock Test",
-      date: format(examDate, "yyyy-MM-dd"),
-      time: "10:00",
-      duration: 120,
-      completed: false,
-      source: "AI Summary",
-    });
-
-    const newExamEntry = {
-      id: Date.now().toString(),
-      subject: newExam.subject,
-      date: newExam.date,
-      topics,
-      priority: daysUntilExam <= 5 ? "high" : daysUntilExam <= 10 ? "medium" : "low",
-      files: newExam.files,
-    };
-
-    setExams([...exams, newExamEntry]);
-    setStudySessions([...studySessions, ...sessions]);
-    setIsAddExamOpen(false);
-    setNewExam({ subject: "", date: "", topics: "", files: [] });
-
-    showToast(
-      "AI Study Plan Ready!",
-      `${sessions.length} study sessions created`
-    );
   };
 
   const toggleSessionComplete = (id) => {
     let durationToAdd = 0;
-    setStudySessions(
-      studySessions.map((s) => {
-        if (s.id === id) {
-          durationToAdd = !s.completed ? (s.duration / 60) : -(s.duration / 60);
-          return { ...s, completed: !s.completed };
-        }
-        return s;
-      })
-    );
+    const updatedSessions = studySessions.map((s) => {
+      if (s.id === id) {
+        durationToAdd = !s.completed ? (s.duration / 60) : -(s.duration / 60);
+        return { ...s, completed: !s.completed };
+      }
+      return s;
+    });
+
+    setStudySessions(updatedSessions);
+    syncStudyPlan(exams, updatedSessions);
 
     if (durationToAdd !== 0) {
       const currentHours = user?.studyTime ?? 0;
@@ -436,27 +495,34 @@ export default function StudyPlanner() {
                   const isUrgent = daysLeft <= 3;
 
                   return (
-                    <View
+                    <TouchableOpacity
                       key={exam.id}
                       style={[
                         styles.examCard,
                         isUrgent && styles.examUrgent,
                       ]}
+                      onPress={() => {
+                        const examSessions = studySessions.filter(s => s.subject === exam.subject);
+                        navigation.navigate("StudyPlanDetail", { 
+                          exam, 
+                          sessions: examSessions,
+                          allExams: exams,
+                          allSessions: studySessions
+                        });
+                      }}
                     >
                       <View style={styles.examHeaderRow}>
                         <Text style={[styles.examSubject, { fontSize: fontSize.xl }]}>
                           {exam.subject}
                         </Text>
-                        {isUrgent && (
-                          <Ionicons
-                            name="flame"
-                            size={isTablet ? moderateScale(24) : moderateScale(20)}
-                            color={colors.danger}
-                          />
-                        )}
+                        <Ionicons
+                          name="chevron-forward"
+                          size={moderateScale(20)}
+                          color={colors.subText}
+                        />
                       </View>
                       <Text style={[styles.examDate, { fontSize: fontSize.base }]}>
-                        {format(new Date(exam.date), "EEE, MMM d")} • {daysLeft} days
+                        {format(new Date(exam.date), "d MMMM yyyy")} • {daysLeft} days
                       </Text>
                       <View style={styles.fileTags}>
                         {exam.files.map((f, i) => (
@@ -475,95 +541,13 @@ export default function StudyPlanner() {
                           </View>
                         ))}
                       </View>
-                    </View>
+                    </TouchableOpacity>
                   );
                 })}
               </View>
             </>
           )}
 
-          {/* Today's Plan */}
-          <View style={styles.scheduleCard}>
-            <View style={styles.cardHeader}>
-              <Text style={[styles.cardTitle, { fontSize: fontSize['2xl'] }]}>
-                Today's Study Plan
-              </Text>
-              <Text style={[styles.cardSubtitle, { fontSize: fontSize.base }]}>
-                {todaysSessions.filter((s) => !s.completed).length} left
-              </Text>
-            </View>
-            {todaysSessions.length === 0 ? (
-              <Text style={[styles.empty, { fontSize: fontSize.base }]}>
-                No study sessions today
-              </Text>
-            ) : (
-              todaysSessions.map((session) => (
-                <View
-                  key={session.id}
-                  style={[
-                    styles.sessionItem,
-                    session.completed && styles.sessionDone,
-                  ]}
-                >
-                  <View style={styles.sessionLeft}>
-                    <Text style={[styles.sessionTopic, { fontSize: fontSize.lg }]}>
-                      {session.topic}
-                    </Text>
-                    <View style={styles.sessionMeta}>
-                      <Text style={[styles.meta, { fontSize: fontSize.sm }]}>
-                        <Ionicons
-                          name="time-outline"
-                          size={isTablet ? moderateScale(16) : moderateScale(14)}
-                        /> {session.time}
-                      </Text>
-                      <Text style={[styles.meta, { fontSize: fontSize.sm }]}>
-                        • {session.duration} min
-                      </Text>
-                      <Text style={[styles.meta, { fontSize: fontSize.sm }]}>
-                        • {session.source}
-                      </Text>
-                    </View>
-                  </View>
-                  <TouchableOpacity
-                    style={[
-                      styles.completeBtn,
-                      session.completed && styles.completeBtnDone,
-                    ]}
-                    onPress={() => toggleSessionComplete(session.id)}
-                  >
-                    <Text style={[styles.completeText, { fontSize: fontSize.base }]}>
-                      {session.completed ? "Done" : "Start"}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              ))
-            )}
-          </View>
-
-          {/* Upcoming Sessions */}
-          {upcomingSessions.length > 0 && (
-            <>
-              <Text style={[styles.sectionTitle, { fontSize: fontSize['2xl'] }]}>
-                Upcoming
-              </Text>
-              {upcomingSessions.slice(0, isTablet ? 5 : 3).map((s) => (
-                <View key={s.id} style={styles.upcomingItem}>
-                  <Text style={[styles.upcomingDate, { fontSize: fontSize.base }]}>
-                    {format(new Date(s.date), "MMM d")}
-                  </Text>
-                  <Text
-                    style={[styles.upcomingTopic, { fontSize: fontSize.base }]}
-                    numberOfLines={1}
-                  >
-                    {s.topic}
-                  </Text>
-                  <Text style={[styles.upcomingTime, { fontSize: fontSize.sm }]}>
-                    {s.time}
-                  </Text>
-                </View>
-              ))}
-            </>
-          )}
         </View>
       </ScrollView>
 

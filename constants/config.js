@@ -9,6 +9,7 @@ export const CONFIG = {
     API_URLS: {
         NOTES: `${API_BASE_URL}/notes`,
         AUTH: `${API_BASE_URL}/auth`,
+        STUDY_PLANS: `${API_BASE_URL}/study-plans`,
     }
 };
 

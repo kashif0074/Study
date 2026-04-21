@@ -153,7 +153,8 @@ export const AuthProvider = ({ children }) => {
             toggleAdminMode,
             updateUser: (updates) => {
                 setUser(prev => prev ? { ...prev, ...updates } : null);
-            }
+            },
+            recordActivity: () => console.log('Activity tracked')
         }}>
             {children}
         </AuthContext.Provider>

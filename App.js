@@ -17,6 +17,7 @@ import NoteDetailScreen from "./screens/NoteDetailScreen";
 import NotesScreen from "./screens/NotesScreen";
 import AITools from "./screens/AiTools";
 import StudyPlanner from "./screens/StudyPlanner";
+import StudyPlanDetailScreen from "./screens/StudyPlanDetailScreen";
 import Communities from "./screens/Communities";
 import ProfileScreen from "./screens/ProfileScreen";
 import AdminDashboard from "./screens/AdminDashboard";
@@ -71,6 +72,23 @@ function NotesStackScreen() {
     >
       <Stack.Screen name="NotesMain" component={NotesScreen} />
       <Stack.Screen name="NoteDetail" component={NoteDetailScreen} />
+    </Stack.Navigator>
+  );
+}
+
+// Create Stack for Planner Tab
+function PlannerStackScreen() {
+  const { colors } = useAuth();
+
+  return (
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+        cardStyle: { backgroundColor: colors.background }
+      }}
+    >
+      <Stack.Screen name="PlannerMain" component={StudyPlanner} />
+      <Stack.Screen name="StudyPlanDetail" component={StudyPlanDetailScreen} />
     </Stack.Navigator>
   );
 }
@@ -188,7 +206,7 @@ function MainTabs() {
       <Tab.Screen name="Home" component={HomeStackScreen} />
       <Tab.Screen name="Notes" component={NotesStackScreen} />
       <Tab.Screen name="AiTools" component={AITools} />
-      <Tab.Screen name="Planner" component={StudyPlanner} />
+      <Tab.Screen name="Planner" component={PlannerStackScreen} />
       <Tab.Screen name="Communities" component={Communities} />
       <Tab.Screen name="Profile">
         {() => <ProfileScreen totalNotes={totalNotes} totalPosts={totalPosts} />}
