@@ -43,13 +43,15 @@ app.get('/', (req, res) => {
 const authRoutes = require('./routes/auth');
 const noteRoutes = require('./routes/notes');
 const studyPlanRoutes = require('./routes/studyPlans');
+const aiHistoryRoutes = require('./routes/aiHistory');
 
 // Use Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/notes', noteRoutes);
 app.use('/api/study-plans', studyPlanRoutes);
+app.use('/api/ai-history', aiHistoryRoutes);
 
 // Start Server
-app.listen(PORT, () => {
-    console.log(`🚀 Server is running on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Server is running on http://0.0.0.0:${PORT}`);
 });

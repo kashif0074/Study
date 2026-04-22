@@ -2,6 +2,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { lightTheme, darkTheme } from '../constants/color';
+import CONFIG from '../constants/config';
 import { auth } from '../firebase/config';
 import { 
   onAuthStateChanged, 
@@ -41,8 +42,22 @@ export const AuthProvider = ({ children }) => {
                     setIsAdmin(savedAdminMode === 'true');
                 }
 
+                // Fetch MongoDB profile data to merge with Firebase user
+                let mongoProfile = {};
+                try {
+                    const profileResp = await fetch(`${CONFIG.API_URLS.AUTH}/profile/${cleanEmail}`);
+                    if (profileResp.ok) {
+                        mongoProfile = await profileResp.json();
+                        console.log("📊 MongoDB Profile loaded:", mongoProfile.email);
+                    }
+                } catch (err) {
+                    console.warn("⚠️ Could not fetch MongoDB profile:", err);
+                }
+
                 setUser({
                     ...currentUser,
+                    ...mongoProfile,
+                    uid: currentUser.uid, // Ensure uid is preserved
                     isAdmin: isAdminUser
                 });
             } else {
@@ -151,8 +166,25 @@ export const AuthProvider = ({ children }) => {
             colors,
             isAdmin,
             toggleAdminMode,
-            updateUser: (updates) => {
-                setUser(prev => prev ? { ...prev, ...updates } : null);
+            updateUser: async (updates) => {
+                setUser(prev => {
+                    if (!prev) return null;
+                    const newUser = { ...prev, ...updates };
+
+                    // Persist to backend asynchronously
+                    const email = prev.email || prev.emailAddress;
+                    if (email) {
+                        fetch(`${CONFIG.API_URLS.AUTH}/update-profile`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ email, ...updates })
+                        }).then(r => r.json())
+                          .then(data => console.log("💾 Persistence Sync:", data.message))
+                          .catch(err => console.error("❌ Persistence Error:", err));
+                    }
+
+                    return newUser;
+                });
             },
             recordActivity: () => console.log('Activity tracked')
         }}>

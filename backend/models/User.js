@@ -20,6 +20,22 @@ const userSchema = new mongoose.Schema({
         required: true,
         minlength: 6
     },
+    quizScore: {
+        type: String,
+        default: "0%"
+    },
+    studyStreak: {
+        type: Number,
+        default: 0
+    },
+    studyTime: {
+        type: Number,
+        default: 0
+    },
+    avatar: {
+        type: String,
+        default: ""
+    },
     createdAt: {
         type: Date,
         default: Date.now

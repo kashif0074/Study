@@ -23,6 +23,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from 'expo-file-system/legacy';
 import { useAuth } from "../context/AuthContext";
 import { askGemini } from "../constants/gemini";
+import CONFIG from "../constants/config";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const isTablet = screenWidth >= 768;
@@ -87,6 +88,13 @@ export default function AITools({ route, notes = [] }) {
     const [uploadedFiles, setUploadedFiles] = useState([]);
     const [numQuestions, setNumQuestions] = useState(5);
 
+    // AI History State
+    const [summaryHistory, setSummaryHistory] = useState([]);
+    const [quizHistory, setQuizHistory] = useState([]);
+    const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(false);
+    const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
+    const { user } = useAuth();
+
     // ✅ Handle navigation from NotesScreen
     useEffect(() => {
         if (route?.params) {
@@ -117,6 +125,57 @@ export default function AITools({ route, notes = [] }) {
             }
         }
     }, [route?.params]);
+
+    // Load History on Mount
+    useEffect(() => {
+        if (user?.uid) {
+            fetchHistory("summary");
+            fetchHistory("quiz");
+        }
+    }, [user?.uid]);
+
+    const fetchHistory = async (type) => {
+        try {
+            const resp = await fetch(`${CONFIG.API_URLS.AI_HISTORY}?userId=${user.uid}&type=${type}`);
+            const data = await resp.json();
+            if (Array.isArray(data)) {
+                if (type === "summary") setSummaryHistory(data);
+                else setQuizHistory(data);
+            }
+        } catch (error) {
+            console.error(`Error fetching ${type} history:`, error);
+        }
+    };
+
+    const saveToHistory = async (type, content, title) => {
+        if (!user?.uid) return;
+        try {
+            await fetch(CONFIG.API_URLS.AI_HISTORY, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    userId: user.uid,
+                    type,
+                    content,
+                    title: title || (type === "summary" ? "New Summary" : "New Quiz"),
+                    sourceMaterial: inputText.substring(0, 100) + "..."
+                })
+            });
+            fetchHistory(type); 
+        } catch (error) {
+            console.error(`Error saving ${type} to history:`, error);
+        }
+    };
+
+    const deriveTitle = (defaultPrefix) => {
+        if (route?.params?.noteTitle) return route.params.noteTitle;
+        if (uploadedFiles.length > 0) return uploadedFiles[0].name;
+        if (inputText.trim()) {
+            const firstLine = inputText.trim().split('\n')[0];
+            return firstLine.length > 40 ? firstLine.substring(0, 40) + "..." : firstLine;
+        }
+        return `${defaultPrefix} - ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    };
 
     // ✅ Sync note content when note is selected from dropdown
     useEffect(() => {
@@ -386,6 +445,7 @@ export default function AITools({ route, notes = [] }) {
 
             const responseText = await askGemini(prompt, filesToSend);
             setSummary(responseText);
+            saveToHistory("summary", responseText, deriveTitle("Summary"));
             showToast("✅ Summary Ready!", "AI has analyzed your content.");
         } catch (error) {
             console.error("AI Summarize Error:", error);
@@ -437,6 +497,7 @@ export default function AITools({ route, notes = [] }) {
             
             if (Array.isArray(questions)) {
                 setQuiz(questions);
+                saveToHistory("quiz", questions, deriveTitle("Quiz"));
                 showToast("✅ Quiz Generated!", `${questions.length} questions ready for you!`);
             } else {
                 throw new Error("Invalid response format from AI");
@@ -551,9 +612,109 @@ export default function AITools({ route, notes = [] }) {
             />
             <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                 <View style={styles.header}>
-                    <Ionicons name="sparkles" size={scale(40)} color={colors.white} />
-                    <Text style={styles.headerTitle}>AI Study Tools</Text>
+                    <TouchableOpacity onPress={() => setIsLeftSidebarOpen(true)} style={styles.historyToggleBtn}>
+                        <Ionicons name="time-outline" size={scale(24)} color={colors.white} />
+                    </TouchableOpacity>
+                    <View style={styles.headerTitleContainer}>
+                        <Ionicons name="sparkles" size={scale(32)} color={colors.white} />
+                        <Text style={styles.headerTitle}>AI Tools</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => setIsRightSidebarOpen(true)} style={styles.historyToggleBtn}>
+                        <Ionicons name="list-outline" size={scale(24)} color={colors.white} />
+                    </TouchableOpacity>
                 </View>
+
+                {/* Left Sidebar: Summary History */}
+                <Modal
+                    visible={isLeftSidebarOpen}
+                    animationType="slide"
+                    transparent={true}
+                    onRequestClose={() => setIsLeftSidebarOpen(false)}
+                >
+                    <View style={styles.modalOverlay}>
+                        <View style={styles.sidebar(true)}>
+                            <View style={styles.sidebarHeader}>
+                                <Text style={styles.sidebarTitle}>Summary History</Text>
+                                <TouchableOpacity onPress={() => setIsLeftSidebarOpen(false)}>
+                                    <Ionicons name="close" size={scale(24)} color={colors.text} />
+                                </TouchableOpacity>
+                            </View>
+                            <ScrollView style={styles.sidebarContent}>
+                                {summaryHistory.length === 0 ? (
+                                    <View style={styles.emptyHistory}>
+                                        <Text style={{ color: colors.subText }}>No history yet</Text>
+                                    </View>
+                                ) : (
+                                    summaryHistory.map((item) => (
+                                        <TouchableOpacity 
+                                            key={item._id} 
+                                            style={styles.historyItem}
+                                            onPress={() => {
+                                                setSummary(item.content);
+                                                setActiveTab("summarize");
+                                                setIsLeftSidebarOpen(false);
+                                            }}
+                                        >
+                                            <Ionicons name="document-text" size={scale(18)} color={colors.primary} />
+                                            <View style={styles.historyItemInfo}>
+                                                <Text style={styles.historyItemTitle} numberOfLines={1}>{item.title}</Text>
+                                                <Text style={styles.historyItemDate}>{new Date(item.createdAt).toLocaleDateString()}</Text>
+                                            </View>
+                                        </TouchableOpacity>
+                                    ))
+                                )}
+                            </ScrollView>
+                        </View>
+                        <TouchableOpacity style={styles.modalBackdrop} onPress={() => setIsLeftSidebarOpen(false)} />
+                    </View>
+                </Modal>
+
+                {/* Right Sidebar: Quiz History */}
+                <Modal
+                    visible={isRightSidebarOpen}
+                    animationType="slide"
+                    transparent={true}
+                    onRequestClose={() => setIsRightSidebarOpen(false)}
+                >
+                    <View style={[styles.modalOverlay, { justifyContent: 'flex-end' }]}>
+                        <TouchableOpacity style={styles.modalBackdrop} onPress={() => setIsRightSidebarOpen(false)} />
+                        <View style={styles.sidebar(false)}>
+                            <View style={styles.sidebarHeader}>
+                                <Text style={styles.sidebarTitle}>Quiz History</Text>
+                                <TouchableOpacity onPress={() => setIsRightSidebarOpen(false)}>
+                                    <Ionicons name="close" size={scale(24)} color={colors.text} />
+                                </TouchableOpacity>
+                            </View>
+                            <ScrollView style={styles.sidebarContent}>
+                                {quizHistory.length === 0 ? (
+                                    <View style={styles.emptyHistory}>
+                                        <Text style={{ color: colors.subText }}>No history yet</Text>
+                                    </View>
+                                ) : (
+                                    quizHistory.map((item) => (
+                                        <TouchableOpacity 
+                                            key={item._id} 
+                                            style={styles.historyItem}
+                                            onPress={() => {
+                                                setQuiz(item.content);
+                                                setActiveTab("quiz");
+                                                setShowResults(false);
+                                                setQuizAnswers({});
+                                                setIsRightSidebarOpen(false);
+                                            }}
+                                        >
+                                            <Ionicons name="bulb" size={scale(18)} color={colors.warning} />
+                                            <View style={styles.historyItemInfo}>
+                                                <Text style={styles.historyItemTitle} numberOfLines={1}>{item.title}</Text>
+                                                <Text style={styles.historyItemDate}>{new Date(item.createdAt).toLocaleDateString()}</Text>
+                                            </View>
+                                        </TouchableOpacity>
+                                    ))
+                                )}
+                            </ScrollView>
+                        </View>
+                    </View>
+                </Modal>
 
                 {isAutoGenerating && (
                     <View style={styles.autoGenIndicator}>
@@ -770,7 +931,34 @@ const getStyles = (colors) => StyleSheet.create({
             android: { elevation: 8 },
         }),
     },
-    headerTitle: { fontSize: scale(28), fontWeight: "800", color: colors.white, marginLeft: scale(16), flex: 1 },
+    headerTitle: { fontSize: scale(22), fontWeight: "800", color: colors.white, flex: 0 },
+    headerTitleContainer: { flexDirection: "row", alignItems: "center", justifyContent: "center", flex: 1, gap: 10 },
+    historyToggleBtn: { padding: scale(8), backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: scale(10) },
+    modalOverlay: { flex: 1, flexDirection: 'row', backgroundColor: 'rgba(0,0,0,0.5)' },
+    modalBackdrop: { flex: 1 },
+    sidebar: (isLeft) => ({
+        width: screenWidth * 0.75,
+        maxWidth: 320,
+        backgroundColor: colors.card,
+        height: '100%',
+        paddingTop: Platform.OS === 'ios' ? verticalScale(50) : verticalScale(30),
+        borderTopRightRadius: isLeft ? scale(24) : 0,
+        borderBottomRightRadius: isLeft ? scale(24) : 0,
+        borderTopLeftRadius: isLeft ? 0 : scale(24),
+        borderBottomLeftRadius: isLeft ? 0 : scale(24),
+        ...Platform.select({
+            ios: { shadowColor: colors.black, shadowOffset: { width: isLeft ? 4 : -4, height: 0 }, shadowOpacity: 0.2, shadowRadius: 10 },
+            android: { elevation: 16 }
+        })
+    }),
+    sidebarHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: scale(20), paddingBottom: scale(20), borderBottomWidth: 1, borderBottomColor: colors.border },
+    sidebarTitle: { fontSize: scale(18), fontWeight: '800', color: colors.text },
+    sidebarContent: { flex: 1, padding: scale(16) },
+    historyItem: { flexDirection: 'row', alignItems: 'center', padding: scale(12), borderRadius: scale(12), backgroundColor: colors.background, marginBottom: scale(12), borderWidth: 1, borderColor: colors.border },
+    historyItemInfo: { marginLeft: scale(12), flex: 1 },
+    historyItemTitle: { fontSize: scale(14), fontWeight: '700', color: colors.text },
+    historyItemDate: { fontSize: scale(12), color: colors.subText, marginTop: scale(2) },
+    emptyHistory: { alignItems: 'center', justifyContent: 'center', paddingVertical: scale(40) },
     autoGenIndicator: { flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: colors.accent + "40", padding: scale(12), marginHorizontal: scale(20), marginBottom: verticalScale(20), borderRadius: scale(12) },
     autoGenText: { fontSize: scale(14), color: colors.primary, fontWeight: "600", marginLeft: scale(10) },
     uploadSection: { paddingHorizontal: scale(20), marginBottom: verticalScale(24) },
