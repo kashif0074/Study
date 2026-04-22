@@ -44,12 +44,14 @@ const authRoutes = require('./routes/auth');
 const noteRoutes = require('./routes/notes');
 const studyPlanRoutes = require('./routes/studyPlans');
 const aiHistoryRoutes = require('./routes/aiHistory');
+const communityRoutes = require('./routes/communities');
 
 // Use Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/notes', noteRoutes);
 app.use('/api/study-plans', studyPlanRoutes);
 app.use('/api/ai-history', aiHistoryRoutes);
+app.use('/api/communities', communityRoutes);
 
 // Start Server
 app.listen(PORT, '0.0.0.0', () => {

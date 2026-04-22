@@ -60,7 +60,7 @@ export default function AuthScreen({ visible, onClose }) {
                     Alert.alert("Error", "Please agree to the Terms and Privacy Policy");
                     return;
                 }
-                await signup(cleanEmail, password);
+                await signup(cleanEmail, password, name);
                 Alert.alert("Success", "Account created successfully! Please login.");
                 // Switch to login mode after signup
                 setIsLogin(true);

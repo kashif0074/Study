@@ -36,6 +36,22 @@ const userSchema = new mongoose.Schema({
         type: String,
         default: ""
     },
+    bio: {
+        type: String,
+        default: ""
+    },
+    institution: {
+        type: String,
+        default: ""
+    },
+    major: {
+        type: String,
+        default: ""
+    },
+    year: {
+        type: String,
+        default: ""
+    },
     createdAt: {
         type: Date,
         default: Date.now

@@ -14,12 +14,14 @@ import {
     useWindowDimensions,
     SafeAreaView,
     StatusBar,
+    Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
 import { useAuth } from "../context/AuthContext";
 import AdminDashboard from "./AdminDashboard";
+import CONFIG from "../constants/config";
 
 export default function ProfileScreen() {
     const {
@@ -49,12 +51,12 @@ export default function ProfileScreen() {
     const [adminDashboardOpen, setAdminDashboardOpen] = useState(false);
 
     const [profile, setProfile] = useState({
-        name: user?.name || "Kashif",
-        email: user?.email || "malik.kaxif7@gmail.com",
-        institution: user?.institution || "Foundation University",
-        major: user?.major || "Information Technology",
-        year: user?.year || "Senior",
-        bio: user?.bio || "Passionate about AI and machine learning. Love sharing notes and helping fellow students succeed.",
+        name: user?.name || "Student",
+        email: user?.email || "",
+        institution: user?.institution || "",
+        major: user?.major || "",
+        year: user?.year || "",
+        bio: user?.bio || "",
         avatar: user?.avatar || null,
     });
 
@@ -78,6 +80,7 @@ export default function ProfileScreen() {
     const [tempName, setTempName] = useState(profile.name);
     const [tempMajor, setTempMajor] = useState(profile.major);
     const [tempBio, setTempBio] = useState(profile.bio);
+    const [tempInstitution, setTempInstitution] = useState(profile.institution);
 
     // Use colors from AuthContext directly
     // const theme removed in favor of colors object
@@ -97,9 +100,38 @@ export default function ProfileScreen() {
         });
 
         if (!result.canceled) {
-            const newAvatar = result.assets[0].uri;
-            setProfile({ ...profile, avatar: newAvatar });
-            updateUser({ avatar: newAvatar });
+            const newAvatarUri = result.assets[0].uri;
+            
+            // Upload to server
+            try {
+                const formData = new FormData();
+                formData.append('avatar', {
+                    uri: Platform.OS === 'ios' ? newAvatarUri.replace('file://', '') : newAvatarUri,
+                    name: 'avatar.jpg',
+                    type: 'image/jpeg',
+                });
+
+                const uploadResponse = await fetch(`${CONFIG.API_URLS.AUTH}/upload-avatar`, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'Content-Type': 'multipart/form-data',
+                    },
+                });
+
+                const uploadData = await uploadResponse.json();
+                if (uploadResponse.ok && uploadData.avatarUrl) {
+                    const fullAvatarUrl = uploadData.avatarUrl;
+                    setProfile({ ...profile, avatar: fullAvatarUrl });
+                    updateUser({ avatar: fullAvatarUrl });
+                    Alert.alert("Success", "Profile picture updated!");
+                } else {
+                    throw new Error(uploadData.message || "Upload failed");
+                }
+            } catch (error) {
+                console.error("Avatar upload error:", error);
+                Alert.alert("Error", "Failed to upload profile picture.");
+            }
         }
     };
 
@@ -107,7 +139,8 @@ export default function ProfileScreen() {
         const updatedData = {
             name: tempName,
             major: tempMajor,
-            bio: tempBio
+            bio: tempBio,
+            institution: tempInstitution
         };
         setProfile({ ...profile, ...updatedData });
         updateUser(updatedData);
@@ -201,7 +234,11 @@ export default function ProfileScreen() {
                         <View style={styles.avatarContainer}>
                             {profile.avatar ? (
                                 <Image
-                                    source={{ uri: profile.avatar }}
+                                    source={{ 
+                                        uri: profile.avatar.startsWith('http') 
+                                            ? profile.avatar 
+                                            : `${CONFIG.API_URLS.AUTH.replace('/api/auth', '')}${profile.avatar}` 
+                                    }}
                                     style={[
                                         styles.avatarImage,
                                         {
@@ -265,7 +302,9 @@ export default function ProfileScreen() {
                             {
                                 fontSize: scale(isTablet ? 14 : isSmallScreen ? 12 : 13),
                             }
-                        ]}>{profile.institution} • {profile.major}</Text>
+                        ]}>
+                            {profile.institution || "No Institute"} {profile.major ? `• ${profile.major}` : ""}
+                        </Text>
 
                         <View style={[
                             styles.divider,
@@ -290,7 +329,7 @@ export default function ProfileScreen() {
                                 fontSize: scale(isTablet ? 16 : isSmallScreen ? 13 : 14),
                                 lineHeight: scale(isTablet ? 26 : isSmallScreen ? 20 : 22),
                             }
-                        ]}>{profile.bio}</Text>
+                        ]}>{profile.bio || "No bio yet. Tap edit to add one!"}</Text>
 
                         <TouchableOpacity
                             style={[
@@ -306,6 +345,7 @@ export default function ProfileScreen() {
                                 setTempName(profile.name);
                                 setTempMajor(profile.major);
                                 setTempBio(profile.bio);
+                                setTempInstitution(profile.institution);
                                 setEditModal(true);
                             }}
                         >
@@ -559,6 +599,26 @@ export default function ProfileScreen() {
                                     marginBottom: verticalScale(16),
                                 }
                             ]}
+                            value={tempInstitution}
+                            onChangeText={setTempInstitution}
+                            placeholder="Institute"
+                            placeholderTextColor={colors.subText}
+                        />
+
+                        <TextInput
+                            style={[
+                                styles.input,
+                                {
+                                    backgroundColor: colors.inputBackground,
+                                    color: colors.text,
+                                    borderColor: colors.border,
+                                    height: verticalScale(isTablet ? 64 : isSmallScreen ? 50 : 56),
+                                    borderRadius: scale(16),
+                                    paddingHorizontal: scale(16),
+                                    fontSize: scale(isTablet ? 18 : isSmallScreen ? 15 : 16),
+                                    marginBottom: verticalScale(16),
+                                }
+                            ]}
                             value={tempMajor}
                             onChangeText={setTempMajor}
                             placeholder="Major"
@@ -688,7 +748,7 @@ export default function ProfileScreen() {
                                     <Text style={[
                                         styles.accountInfoLabel,
                                         { color: colors.subText, fontSize: scale(14) }
-                                    ]}>Institution</Text>
+                                    ]}>Institute</Text>
                                     <Text style={[
                                         styles.accountInfoValue,
                                         { color: colors.text, fontSize: scale(16) }

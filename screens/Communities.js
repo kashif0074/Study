@@ -18,6 +18,8 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useAuth } from "../context/AuthContext";
+import CONFIG from "../constants/config";
+import { useEffect } from "react";
 
 // Global constants removed to support dynamic resizing
 
@@ -57,15 +59,18 @@ const PostCard = ({ post, onLike, onComment, isAdmin, onAdminAction }) => {
         );
     };
 
+    const formattedTime = new Date(post.createdAt).toLocaleDateString() + ' ' + new Date(post.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const baseUrl = CONFIG.API_URLS.AUTH.split('/api')[0]; // Extract base domain
+
     return (
         <View style={styles.postCard}>
             <View style={styles.postHeader}>
                 <View style={styles.authorAvatar}>
-                    <Text style={styles.avatarText}>{post.author[0]}</Text>
+                    <Text style={styles.avatarText}>{(post.author?.name || "U")[0]}</Text>
                 </View>
                 <View style={styles.postMeta}>
-                    <Text style={styles.authorName}>{post.author}</Text>
-                    <Text style={styles.timestamp}>{post.timestamp}</Text>
+                    <Text style={styles.authorName}>{post.author?.name || "Unknown User"}</Text>
+                    <Text style={styles.timestamp}>{formattedTime}</Text>
                     {post.type && (
                         <View style={[styles.postTypeBadge,
                         post.type === 'question' ? styles.questionBadge :
@@ -84,10 +89,10 @@ const PostCard = ({ post, onLike, onComment, isAdmin, onAdminAction }) => {
 
             {post.images?.length > 0 && (
                 <View style={styles.imageGrid}>
-                    {post.images.map((img, i) => (
+                    {post.images.map((imgUrl, i) => (
                         <Image
                             key={i}
-                            source={{ uri: img.uri }}
+                            source={{ uri: imgUrl.startsWith('http') ? imgUrl : `${baseUrl}${imgUrl}` }}
                             style={styles.postImage}
                             resizeMode="cover"
                         />
@@ -106,7 +111,7 @@ const PostCard = ({ post, onLike, onComment, isAdmin, onAdminAction }) => {
                         color={post.isLiked ? colors.danger : colors.subText}
                     />
                     <Text style={[styles.actionText, post.isLiked && styles.likedText]}>
-                        {post.likes}
+                        {post.likes?.length || 0}
                     </Text>
                 </TouchableOpacity>
 
@@ -170,13 +175,14 @@ const PostCard = ({ post, onLike, onComment, isAdmin, onAdminAction }) => {
 export default function Communities() {
     const { width } = useWindowDimensions();
     const isTablet = width >= 768;
-    const { colors, isAdmin } = useAuth();
+    const { colors, isAdmin, user } = useAuth();
     const styles = getStyles(colors, isTablet);
     const [searchQuery, setSearchQuery] = useState("");
     const [showCreatePost, setShowCreatePost] = useState(false);
     const [showCreateCommunity, setShowCreateCommunity] = useState(false);
     const [selectedCommunity, setSelectedCommunity] = useState(null);
     const [editingCommunity, setEditingCommunity] = useState(null);
+    const [loading, setLoading] = useState(true);
 
     const getCommunityColor = (subject) => {
         if (subject === 'Software Engineering') return colors.catMath;
@@ -187,100 +193,213 @@ export default function Communities() {
         return colors.primary; // Default color
     };
 
-    const [communities, setCommunities] = useState([
-        {
-            id: "1",
-            name: "Software Engineering",
-            subject: "Software Engineering",
-            members: 2453,
-            posts: 1234,
-            description: "Share Design,Development,And InnovaTions",
-            color: getCommunityColor("Software Engineering"),
-            isJoined: true,
-            createdBy: "system",
-        },
-        {
-            id: "2",
-            name: "Physics Lab",
-            subject: "Physics",
-            members: 1876,
-            posts: 892,
-            description: "Experiments, concepts & breakthroughs",
-            color: getCommunityColor("Physics"),
-            isJoined: true,
-            createdBy: "system",
-        },
-        {
-            id: "3",
-            name: "Web Development",
-            subject: "Web Development",
-            members: 1532,
-            posts: 734,
-            description: "Html, Css & Js",
-            color: getCommunityColor("Web Development"),
-            isJoined: false,
-            createdBy: "system",
-        },
-        {
-            id: "4",
-            name: "Mobile Development",
-            subject: "Mobile Development",
-            members: 2105,
-            posts: 1456,
-            description: "React Native and Flutter",
-            color: getCommunityColor("Mobile Development"),
-            isJoined: false,
-            createdBy: "system",
-        },
-        {
-            id: "5",
-            name: "Computer Science Hub",
-            subject: "CS",
-            members: 3421,
-            posts: 2134,
-            description: "Programming, algorithms & discussions",
-            color: getCommunityColor("CS"),
-            isJoined: false,
-            createdBy: "system",
-        },
-    ]);
+    const [communities, setCommunities] = useState([]);
+    const [posts, setPosts] = useState([]);
 
-    const [posts, setPosts] = useState([
-        {
-            id: "1",
-            author: "Sarah Johnson",
-            content: "Just learned completing the square! Here's my step-by-step method.",
-            type: "note",
-            likes: 24,
-            comments: [
-                { id: "c1", author: "Alex", text: "Super clear! Thanks", timestamp: "1h ago" },
-                { id: "c2", author: "Emma", text: "Can you share the PDF?", timestamp: "30m ago" },
-            ],
-            timestamp: "2h ago",
-            isLiked: false,
-            images: [],
-        },
-        {
-            id: "2",
-            author: "Mike Chen",
-            content: "Permutations vs Combinations — can someone explain the difference?",
-            type: "question",
-            likes: 15,
-            comments: [
-                { id: "c3", author: "John", text: "Order matters in permutations", timestamp: "4h ago" },
-                { id: "c4", author: "Lisa", text: "Combinations don't care about order", timestamp: "3h ago" },
-            ],
-            timestamp: "5h ago",
-            isLiked: true,
-            images: [],
-        },
-    ]);
+    // Fetch Communities on mount
+    useEffect(() => {
+        fetchCommunities();
+    }, [user?.uid]);
 
-    const toggleJoin = (id) => {
-        setCommunities(prev =>
-            prev.map(c => (c.id === id ? { ...c, isJoined: !c.isJoined } : c))
-        );
-        Alert.alert("Success", "Community updated!");
+    // Fetch Posts when a community is opened
+    useEffect(() => {
+        if (selectedCommunity) {
+            fetchPosts(selectedCommunity._id);
+        }
+    }, [selectedCommunity]);
+
+    const fetchCommunities = async () => {
+        if (!user?.uid) return;
+        setLoading(true);
+        try {
+            const resp = await fetch(`${CONFIG.API_URLS.COMMUNITIES}?userId=${user.uid}`);
+            const data = await resp.json();
+            if (Array.isArray(data)) {
+                const formatted = data.map(c => ({ ...c, id: c._id }));
+                setCommunities(formatted);
+            }
+        } catch (error) {
+            console.error("Error fetching communities:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const fetchPosts = async (communityId) => {
+        try {
+            const resp = await fetch(`${CONFIG.API_URLS.COMMUNITIES}/${communityId}/posts`);
+            const data = await resp.json();
+            if (Array.isArray(data)) {
+                // Map _id to id and check liked status
+                const formattedPosts = data.map(p => ({
+                    ...p,
+                    id: p._id,
+                    isLiked: p.likes.includes(user.uid)
+                }));
+                setPosts(formattedPosts);
+            }
+        } catch (error) {
+            console.error("Error fetching posts:", error);
+        }
+    };
+
+    const toggleJoin = async (communityId) => {
+        try {
+            const resp = await fetch(`${CONFIG.API_URLS.COMMUNITIES}/${communityId}/join`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user.uid })
+            });
+            if (resp.ok) {
+                fetchCommunities();
+                Alert.alert("Success", "Joined community!");
+            }
+        } catch (error) {
+            Alert.alert("Error", "Failed to join");
+        }
+    };
+
+    const leaveCommunity = async (communityId) => {
+        try {
+            const resp = await fetch(`${CONFIG.API_URLS.COMMUNITIES}/${communityId}/leave`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user.uid })
+            });
+            if (resp.ok) {
+                fetchCommunities();
+                Alert.alert("Success", "Left community");
+            }
+        } catch (error) {
+            Alert.alert("Error", "Failed to leave");
+        }
+    };
+
+    const handleLike = async (postId, newLiked) => {
+        try {
+            // Optimistic update
+            setPosts(prev => prev.map(p => {
+                if (p.id === postId) {
+                    const newLikes = p.isLiked 
+                        ? p.likes.filter(id => id !== user.uid) 
+                        : [...p.likes, user.uid];
+                    return { ...p, likes: newLikes, isLiked: !p.isLiked };
+                }
+                return p;
+            }));
+
+            await fetch(`${CONFIG.API_URLS.COMMUNITIES}/posts/${postId}/like`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user.uid })
+            });
+            // We don't bother re-fetching here as the optimistic update handles it
+        } catch (error) {
+            console.error("Like error:", error);
+            // Revert on error if needed, but keeping it simple for now
+        }
+    };
+
+    const handleComment = async (postId, newComment) => {
+        try {
+            const resp = await fetch(`${CONFIG.API_URLS.COMMUNITIES}/posts/${postId}/comment`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    author: user.name || user.email.split('@')[0],
+                    text: newComment.text
+                })
+            });
+            if (resp.ok) {
+                fetchPosts(selectedCommunity._id);
+            }
+        } catch (error) {
+            console.error("Comment error:", error);
+        }
+    };
+
+    const addNewPost = async (postData) => {
+        try {
+            setLoading(true);
+            const uploadedImageUrls = [];
+
+            // Upload images first
+            for (const img of postData.images) {
+                const formData = new FormData();
+                const filename = img.uri.split('/').pop();
+                const match = /\.(\w+)$/.exec(filename);
+                const type = match ? `image/${match[1]}` : `image`;
+
+                formData.append('image', {
+                    uri: img.uri,
+                    name: filename,
+                    type: type
+                });
+
+                const uploadResp = await fetch(`${CONFIG.API_URLS.COMMUNITIES}/upload`, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'multipart/form-data',
+                    },
+                });
+
+                if (uploadResp.ok) {
+                    const uploadData = await uploadResp.json();
+                    uploadedImageUrls.push(uploadData.imageUrl);
+                }
+            }
+
+            const resp = await fetch(`${CONFIG.API_URLS.COMMUNITIES}/posts`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    communityId: selectedCommunity._id,
+                    author: {
+                        id: user.uid,
+                        name: user.displayName || user.name || user.email.split('@')[0],
+                        avatar: user.avatar || ""
+                    },
+                    content: postData.content,
+                    type: postData.type,
+                    images: uploadedImageUrls
+                })
+            });
+
+            if (resp.ok) {
+                setShowCreatePost(false);
+                fetchPosts(selectedCommunity._id);
+                fetchCommunities(); // Update post count
+                Alert.alert("Posted!", "Your post is live!");
+            }
+        } catch (error) {
+            console.error("Post creation error:", error);
+            Alert.alert("Error", "Failed to create post");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const addNewCommunity = async (newCommunity) => {
+        try {
+            const resp = await fetch(CONFIG.API_URLS.COMMUNITIES, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ...newCommunity,
+                    userId: user.uid
+                })
+            });
+
+            if (resp.ok) {
+                fetchCommunities();
+                setShowCreateCommunity(false);
+                Alert.alert("Success!", `${newCommunity.name} community created!`);
+            }
+        } catch (error) {
+            Alert.alert("Error", "Failed to create community");
+        }
     };
 
     const filteredCommunities = communities.filter(c =>
@@ -292,17 +411,7 @@ export default function Communities() {
     const openCommunity = (community) => setSelectedCommunity(community);
     const closeCommunity = () => setSelectedCommunity(null);
 
-    const handleLike = (postId, newLiked) => {
-        setPosts(prev =>
-            prev.map(p =>
-                p.id === postId
-                    ? { ...p, isLiked: newLiked, likes: newLiked ? p.likes + 1 : p.likes - 1 }
-                    : p
-            )
-        );
-    };
-
-    const handlePostAction = (postId, action) => {
+    const handlePostAction = async (postId, action) => {
         if (action === "delete") {
             Alert.alert(
                 "Delete Post",
@@ -312,9 +421,20 @@ export default function Communities() {
                     {
                         text: "Delete",
                         style: "destructive",
-                        onPress: () => {
-                            setPosts(prev => prev.filter(p => p.id !== postId));
-                            Alert.alert("Success", "Post deleted!");
+                        onPress: async () => {
+                            try {
+                                const resp = await fetch(`${CONFIG.API_URLS.COMMUNITIES}/posts/${postId}`, {
+                                    method: 'DELETE'
+                                });
+                                if (resp.ok) {
+                                    setPosts(prev => prev.filter(p => p.id !== postId));
+                                    Alert.alert("Success", "Post deleted!");
+                                    // Also update community info for postsCount
+                                    fetchCommunities();
+                                }
+                            } catch (error) {
+                                Alert.alert("Error", "Failed to delete post");
+                            }
                         }
                     }
                 ]
@@ -322,13 +442,24 @@ export default function Communities() {
         }
     };
 
-    const handleUpdateCommunity = (updatedCommunity) => {
-        setCommunities(prev => prev.map(c => c.id === updatedCommunity.id ? { ...c, ...updatedCommunity } : c));
-        setEditingCommunity(null);
-        Alert.alert("Success", "Community updated successfully");
+    const handleUpdateCommunity = async (updatedCommunity) => {
+        try {
+            const resp = await fetch(`${CONFIG.API_URLS.COMMUNITIES}/${updatedCommunity.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updatedCommunity)
+            });
+            if (resp.ok) {
+                fetchCommunities();
+                setEditingCommunity(null);
+                Alert.alert("Success", "Community updated successfully");
+            }
+        } catch (error) {
+            Alert.alert("Error", "Failed to update community");
+        }
     };
 
-    const handleDeleteCommunity = (id, name) => {
+    const handleDeleteCommunity = async (id, name) => {
         Alert.alert(
             "Delete Community",
             `Are you sure you want to delete "${name}"?`,
@@ -337,48 +468,22 @@ export default function Communities() {
                 {
                     text: "Delete",
                     style: "destructive",
-                    onPress: () => {
-                        setCommunities(communities.filter(c => c.id !== id));
-                        Alert.alert("Success", "Community deleted");
+                    onPress: async () => {
+                        try {
+                            const resp = await fetch(`${CONFIG.API_URLS.COMMUNITIES}/${id}`, {
+                                method: 'DELETE'
+                            });
+                            if (resp.ok) {
+                                fetchCommunities();
+                                Alert.alert("Success", "Community deleted");
+                            }
+                        } catch (error) {
+                            Alert.alert("Error", "Failed to delete community");
+                        }
                     }
                 }
             ]
         );
-    };
-
-    const handleComment = (postId, newComment) => {
-        setPosts(prev =>
-            prev.map(p =>
-                p.id === postId ? { ...p, comments: [...p.comments, newComment] } : p
-            )
-        );
-    };
-
-    const addNewPost = (newPost) => {
-        setPosts(prev => [newPost, ...prev]);
-        setShowCreatePost(false);
-        Alert.alert("Posted!", "Your post is live!");
-    };
-
-    const addNewCommunity = (newCommunity) => {
-        const community = {
-            ...newCommunity,
-            id: Date.now().toString(),
-            members: 1,
-            posts: 0,
-            isJoined: true,
-            createdBy: "user",
-        };
-        setCommunities(prev => [community, ...prev]);
-        setShowCreateCommunity(false);
-        Alert.alert("Success!", `${newCommunity.name} community created!`);
-    };
-
-    const leaveCommunity = (id) => {
-        setCommunities(prev =>
-            prev.map(c => (c.id === id ? { ...c, isJoined: false } : c))
-        );
-        Alert.alert("Left Community", "You have left the community");
     };
 
     return (
@@ -439,13 +544,13 @@ export default function Communities() {
                             >
                                 {communities.filter(c => c.isJoined).map(community => (
                                     <TouchableOpacity
-                                        key={community.id}
+                                        key={community._id || community.id}
                                         style={styles.myCommunityCard}
                                         onPress={() => openCommunity(community)}
                                     >
                                         <View style={[styles.communityColor, { backgroundColor: community.color }]}>
                                             <Ionicons name="people" size={isTablet ? 36 : 28} color={colors.white} />
-                                            {community.createdBy === "user" && (
+                                            {community.createdBy === user?.uid && (
                                                 <View style={styles.userCreatedBadge}>
                                                     <Ionicons name="star" size={isTablet ? 16 : 12} color={colors.warning} />
                                                 </View>
@@ -455,7 +560,7 @@ export default function Communities() {
                                             {community.name}
                                         </Text>
                                         <Text style={styles.myCommunityMembers}>
-                                            {community.members.toLocaleString()} members
+                                            {(community.membersCount || community.members || 0).toLocaleString()} members
                                         </Text>
 
                                         {isAdmin && (
@@ -489,10 +594,10 @@ export default function Communities() {
                         </View>
                     ) : (
                         filteredCommunities.filter(c => !c.isJoined).map(community => (
-                            <View key={community.id} style={styles.discoverCard}>
+                            <View key={community._id || community.id} style={styles.discoverCard}>
                                 <View style={[styles.discoverColor, { backgroundColor: community.color }]}>
                                     <Ionicons name="people" size={isTablet ? 28 : 24} color={colors.white} />
-                                    {community.createdBy === "user" && (
+                                    {community.createdBy === user?.uid && (
                                         <View style={styles.userCreatedSmallBadge}>
                                             <Ionicons name="star" size={isTablet ? 14 : 10} color={colors.warning} />
                                         </View>
@@ -510,10 +615,10 @@ export default function Communities() {
                                     </Text>
                                     <View style={styles.discoverStats}>
                                         <Text style={styles.stat}>
-                                            <Ionicons name="people" size={isTablet ? 16 : 14} /> {community.members.toLocaleString()}
+                                            <Ionicons name="people" size={isTablet ? 16 : 14} /> {(community.membersCount || community.members || 0).toLocaleString()}
                                         </Text>
                                         <Text style={styles.stat}>
-                                            • <Ionicons name="document-text" size={isTablet ? 16 : 14} /> {community.posts} posts
+                                            • <Ionicons name="document-text" size={isTablet ? 16 : 14} /> {(community.postsCount || community.posts || 0).toLocaleString()} posts
                                         </Text>
                                     </View>
                                 </View>
@@ -633,7 +738,7 @@ function CommunityDetail({ community, posts, onBack, onCreatePost, onLike, onCom
                     <View style={styles.detailCommunityStats}>
                         <View style={styles.statItem}>
                             <Ionicons name="people" size={isTablet ? 22 : 16} color={colors.white} />
-                            <Text style={styles.detailStat}>{community?.members.toLocaleString()} Members</Text>
+                            <Text style={styles.detailStat}>{(community?.membersCount || community?.members || 0).toLocaleString()} Members</Text>
                         </View>
                         <View style={styles.statItem}>
                             <Ionicons name="document-text" size={isTablet ? 22 : 16} color={colors.white} />

@@ -104,7 +104,7 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    const signup = async (emailInput, password) => {
+    const signup = async (emailInput, password, name) => {
         const email = typeof emailInput === 'string' 
             ? emailInput.trim().toLowerCase() 
             : (emailInput?.email ? emailInput.email.trim().toLowerCase() : "");
@@ -112,6 +112,18 @@ export const AuthProvider = ({ children }) => {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const newUser = userCredential.user;
         const isAdminUser = email === ADMIN_EMAIL.toLowerCase();
+
+        // Sync with MongoDB backend
+        try {
+            await fetch(`${CONFIG.API_URLS.AUTH}/signup`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password, name })
+            });
+            console.log("✅ MongoDB User created");
+        } catch (err) {
+            console.error("❌ MongoDB Signup Error:", err);
+        }
 
         // Admin signup ho to admin mode ON
         if (isAdminUser) {
@@ -121,6 +133,7 @@ export const AuthProvider = ({ children }) => {
 
         setUser({
             ...newUser,
+            name: name,
             isAdmin: isAdminUser
         });
 
@@ -167,24 +180,33 @@ export const AuthProvider = ({ children }) => {
             isAdmin,
             toggleAdminMode,
             updateUser: async (updates) => {
-                setUser(prev => {
-                    if (!prev) return null;
-                    const newUser = { ...prev, ...updates };
+                const currentUser = user;
+                if (!currentUser) return;
 
-                    // Persist to backend asynchronously
-                    const email = prev.email || prev.emailAddress;
-                    if (email) {
-                        fetch(`${CONFIG.API_URLS.AUTH}/update-profile`, {
+                const email = currentUser.email || currentUser.emailAddress;
+                console.log("🔄 Syncing profile for:", email, "Updates:", updates);
+
+                // Update local state first (Optimistic)
+                setUser(prev => prev ? { ...prev, ...updates } : null);
+
+                // Persist to backend
+                if (email) {
+                    try {
+                        const response = await fetch(`${CONFIG.API_URLS.AUTH}/update-profile`, {
                             method: 'PUT',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ email, ...updates })
-                        }).then(r => r.json())
-                          .then(data => console.log("💾 Persistence Sync:", data.message))
-                          .catch(err => console.error("❌ Persistence Error:", err));
+                        });
+                        const data = await response.json();
+                        if (response.ok) {
+                            console.log("💾 Persistence Sync Success:", data.message);
+                        } else {
+                            console.error("❌ Persistence Sync Failed:", data.message, data.error || "");
+                        }
+                    } catch (err) {
+                        console.error("❌ Persistence Network Error:", err);
                     }
-
-                    return newUser;
-                });
+                }
             },
             recordActivity: () => console.log('Activity tracked')
         }}>

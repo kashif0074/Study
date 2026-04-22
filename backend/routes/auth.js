@@ -1,8 +1,33 @@
-// backend/routes/auth.js
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const multer = require('multer');
+const path = require('path');
+
+// Multer Storage Configuration for Avatars
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, 'uploads/avatars/');
+    },
+    filename: (req, file, cb) => {
+        cb(null, 'avatar-' + Date.now() + path.extname(file.originalname));
+    }
+});
+
+const upload = multer({ 
+    storage: storage,
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+    fileFilter: (req, file, cb) => {
+        const filetypes = /jpeg|jpg|png/;
+        const mimetype = filetypes.test(file.mimetype);
+        const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+        if (mimetype && extname) {
+            return cb(null, true);
+        }
+        cb(new Error("Only images (jpeg, jpg, png) are allowed"));
+    }
+});
 
 // Signup Route
 router.post('/signup', async (req, res) => {
@@ -81,7 +106,7 @@ router.get('/profile/:email', async (req, res) => {
 // Update User Stats/Profile
 router.put('/update-profile', async (req, res) => {
     try {
-        const { email, name, quizScore, studyStreak, studyTime, avatar } = req.body;
+        const { email, name, quizScore, studyStreak, studyTime, avatar, bio, institution, major, year } = req.body;
         
         if (!email) {
             return res.status(400).json({ message: "Email is required to update profile" });
@@ -93,17 +118,25 @@ router.put('/update-profile', async (req, res) => {
         if (studyStreak !== undefined) updates.studyStreak = studyStreak;
         if (studyTime !== undefined) updates.studyTime = studyTime;
         if (avatar !== undefined) updates.avatar = avatar;
+        if (bio !== undefined) updates.bio = bio;
+        if (institution !== undefined) updates.institution = institution;
+        if (major !== undefined) updates.major = major;
+        if (year !== undefined) updates.year = year;
+
+        const setOnInsert = {
+            password: "firebase_user_social_or_external"
+        };
+        if (updates.name === undefined) {
+            setOnInsert.name = name || String(email).split('@')[0] || 'User';
+        }
 
         const user = await User.findOneAndUpdate(
-            { email: email.toLowerCase() },
+            { email: String(email).toLowerCase() },
             { 
                 $set: updates,
-                $setOnInsert: { 
-                    name: name || email.split('@')[0],
-                    password: "firebase_user_social_or_external" // Placeholder for synced users
-                }
+                $setOnInsert: setOnInsert
             },
-            { new: true, upsert: true }
+            { new: true, upsert: true, runValidators: true }
         );
 
         if (!user) {
@@ -112,8 +145,20 @@ router.put('/update-profile', async (req, res) => {
 
         res.json({ message: "Profile updated successfully", user });
     } catch (error) {
-        console.error("Profile update error:", error);
-        res.status(500).json({ message: "Server error during profile update" });
+        console.error("❌ Profile update error:", error);
+        res.status(500).json({ message: "Server error during profile update", error: error.message });
+    }
+});
+
+// Avatar Upload Endpoint
+router.post('/upload-avatar', upload.single('avatar'), (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+        const avatarUrl = `/uploads/avatars/${req.file.filename}`;
+        res.json({ avatarUrl });
+    } catch (error) {
+        console.error("Avatar upload error:", error);
+        res.status(500).json({ message: "Upload failed" });
     }
 });
 

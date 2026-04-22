@@ -11,6 +11,7 @@ export const CONFIG = {
         AUTH: `${API_BASE_URL}/auth`,
         STUDY_PLANS: `${API_BASE_URL}/study-plans`,
         AI_HISTORY: `${API_BASE_URL}/ai-history`,
+        COMMUNITIES: `${API_BASE_URL}/communities`,
     }
 };
 

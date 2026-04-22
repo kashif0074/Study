@@ -279,7 +279,11 @@ export default function HomeScreen() {
                             >
                                 {user?.avatar ? (
                                     <Image
-                                        source={{ uri: user.avatar }}
+                                        source={{ 
+                                            uri: user.avatar.startsWith('http') 
+                                                ? user.avatar 
+                                                : `${CONFIG.API_URLS.AUTH.replace('/api/auth', '')}${user.avatar}`
+                                        }}
                                         style={{ width: '100%', height: '100%' }}
                                     />
                                 ) : (
