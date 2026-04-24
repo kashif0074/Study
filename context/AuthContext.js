@@ -163,6 +163,76 @@ export const AuthProvider = ({ children }) => {
 
     const colors = darkMode ? darkTheme : lightTheme;
 
+    const updateUser = async (updates) => {
+        const currentUser = user;
+        if (!currentUser) return;
+
+        const email = currentUser.email || currentUser.emailAddress;
+        console.log("🔄 Syncing profile for:", email, "Updates:", updates);
+
+        // Update local state first (Optimistic)
+        setUser(prev => prev ? { ...prev, ...updates } : null);
+
+        // Persist to backend
+        if (email) {
+            try {
+                const response = await fetch(`${CONFIG.API_URLS.AUTH}/update-profile`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, ...updates })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    console.log("💾 Persistence Sync Success:", data.message);
+                } else {
+                    console.error("❌ Persistence Sync Failed:", data.message, data.error || "");
+                }
+            } catch (err) {
+                console.error("❌ Persistence Network Error:", err);
+            }
+        }
+    };
+
+    const recordActivity = async () => {
+        if (!user) return;
+        
+        const today = new Date().toISOString().split('T')[0];
+        const lastDate = user.lastActivityDate;
+        
+        if (lastDate === today) return; 
+        
+        let newStreak = user.studyStreak || 0;
+        
+        if (lastDate) {
+            const last = new Date(lastDate);
+            const current = new Date(today);
+            const diffTime = Math.abs(current - last);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            if (diffDays === 1) {
+                newStreak += 1;
+            } else if (diffDays > 1) {
+                newStreak = 1;
+            }
+        } else {
+            newStreak = 1;
+        }
+        
+        await updateUser({ 
+            studyStreak: newStreak, 
+            lastActivityDate: today 
+        });
+    };
+
+    const addStudyTime = async (minutes) => {
+        if (!user) return;
+        const currentHours = user.studyTime || 0;
+        const hoursToAdd = minutes / 60;
+        const newTotalHours = parseFloat((currentHours + hoursToAdd).toFixed(2));
+        
+        await updateUser({ studyTime: newTotalHours });
+    };
+
     return (
         <AuthContext.Provider value={{
             user,
@@ -179,36 +249,9 @@ export const AuthProvider = ({ children }) => {
             colors,
             isAdmin,
             toggleAdminMode,
-            updateUser: async (updates) => {
-                const currentUser = user;
-                if (!currentUser) return;
-
-                const email = currentUser.email || currentUser.emailAddress;
-                console.log("🔄 Syncing profile for:", email, "Updates:", updates);
-
-                // Update local state first (Optimistic)
-                setUser(prev => prev ? { ...prev, ...updates } : null);
-
-                // Persist to backend
-                if (email) {
-                    try {
-                        const response = await fetch(`${CONFIG.API_URLS.AUTH}/update-profile`, {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ email, ...updates })
-                        });
-                        const data = await response.json();
-                        if (response.ok) {
-                            console.log("💾 Persistence Sync Success:", data.message);
-                        } else {
-                            console.error("❌ Persistence Sync Failed:", data.message, data.error || "");
-                        }
-                    } catch (err) {
-                        console.error("❌ Persistence Network Error:", err);
-                    }
-                }
-            },
-            recordActivity: () => console.log('Activity tracked')
+            updateUser,
+            recordActivity,
+            addStudyTime
         }}>
             {children}
         </AuthContext.Provider>

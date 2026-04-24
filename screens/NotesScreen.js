@@ -342,7 +342,7 @@ export default function NotesScreen({ navigation }) {
             type: detectedType,
             fileUrl: selectedFile?.uri || null, 
             subject: detectedType === "text" ? "General" :
-                    detectedType === "pdf" ? "Document" :
+                    ["pdf", "doc", "ppt", "file", "files", "files"].includes(detectedType) ? "Document" :
                     detectedType === "image" ? "Image" : "Voice"
         };
 
@@ -413,36 +413,53 @@ export default function NotesScreen({ navigation }) {
     const filteredNotes = notes.filter(note => {
         const matchesSearch = note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
             note.content.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesType = filterType === "all" || note.type === filterType;
-        return matchesSearch && matchesType;
+        
+        if (filterType === "all") return matchesSearch;
+        
+        const noteType = note.type?.toLowerCase() || "";
+        if (filterType === "files") {
+            return matchesSearch && ["pdf", "doc", "ppt", "file", "files"].includes(noteType);
+        }
+        
+        return matchesSearch && noteType === filterType.toLowerCase();
     });
 
     const filters = [
         { value: "all", label: "All", icon: "apps-outline" },
         { value: "text", label: "Text", icon: "document-text-outline" },
-        { value: "Files", label: "Files", icon: "document-attach-outline" },
+        { value: "files", label: "Files", icon: "document-attach-outline" },
         { value: "image", label: "Image", icon: "image-outline" },
         { value: "voice", label: "Voice", icon: "mic-outline" },
     ];
 
     const getTypeColor = (type) => {
+        const t = (type || "").toLowerCase();
         const map = {
             text: colors.primary,
-            Files: colors.danger,
+            pdf: colors.danger,
+            doc: colors.info,
+            ppt: colors.warning,
+            file: colors.danger,
+            files: colors.danger,
             image: colors.secondary,
             voice: colors.success
         };
-        return map[type] || colors.primary;
+        return map[t] || colors.primary;
     };
 
     const getTypeIcon = (type) => {
+        const t = (type || "").toLowerCase();
         const map = {
             text: "document-text",
-            Files: "document-attach",
+            pdf: "document",
+            doc: "document-text",
+            ppt: "document-attach",
+            file: "document-attach",
+            files: "document-attach",
             image: "image",
             voice: "mic"
         };
-        return map[type] || "document-text";
+        return map[t] || "document-text";
     };
 
     const handleEllipsisPress = (note) => {
@@ -459,6 +476,8 @@ export default function NotesScreen({ navigation }) {
                 navigation.navigate("AiTools", {
                     noteContent: selectedNote.content,
                     noteTitle: selectedNote.title,
+                    noteType: selectedNote.type,
+                    fileUrl: selectedNote.fileUrl || selectedNote.fileUri,
                     autoGenerateSummary: true,
                     tab: "summarize"
                 });
@@ -470,6 +489,8 @@ export default function NotesScreen({ navigation }) {
                 navigation.navigate("AiTools", {
                     noteContent: selectedNote.content,
                     noteTitle: selectedNote.title,
+                    noteType: selectedNote.type,
+                    fileUrl: selectedNote.fileUrl || selectedNote.fileUri,
                     autoGenerateQuiz: true,
                     tab: "quiz"
                 });
@@ -646,7 +667,7 @@ export default function NotesScreen({ navigation }) {
                             <Ionicons
                                 name={f.icon}
                                 size={isSmallScreen ? 14 : isTablet ? 20 : 18}
-                                color={filterType === f.value ? colors.primary : colors.accent}
+                                color={filterType === f.value ? colors.primary : colors.white}
                             />
                             <Text style={[
                                 styles.filterLabel,
@@ -768,7 +789,7 @@ export default function NotesScreen({ navigation }) {
                         {/* Type picker - shows only relevant options based on filter */}
                         {filterType === "all" ? (
                             <View style={styles.typePicker}>
-                                {["text", "Files", "image", "voice"].map(t => (
+                                {["text", "files", "image", "voice"].map(t => (
                                     <TouchableOpacity
                                         key={t}
                                         style={[
@@ -824,7 +845,7 @@ export default function NotesScreen({ navigation }) {
                                     { fontSize: isSmallScreen ? 13 : isTablet ? 16 : 14 }
                                 ]}>
                                     {filterType === "text" ? "Type your text below" :
-                                        filterType === "Files" ? "Upload a PDF/DOC/PPT file" :
+                                        filterType === "files" ? "Upload a PDF/DOC/PPT file" :
                                             filterType === "image" ? "Upload an image" :
                                                 "Record or upload voice note"}
                                 </Text>
@@ -848,7 +869,7 @@ export default function NotesScreen({ navigation }) {
                                 onChangeText={setNewNoteContent}
                                 maxLength={2000}
                             />
-                        ) : newNoteType === "Files" ? (
+                        ) : newNoteType === "files" ? (
                             <TouchableOpacity
                                 style={[
                                     styles.uploadBtn,
@@ -1197,19 +1218,20 @@ const getStyles = (colors) => StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         borderRadius: 20,
-        backgroundColor: colors.overlay,
+        backgroundColor: "rgba(255, 255, 255, 0.15)", // Premium glass look
         marginRight: 8,
     },
     filterActive: {
         backgroundColor: colors.white
     },
     filterLabel: {
-        color: colors.accent,
+        color: colors.white,
         fontWeight: "500",
+        opacity: 0.9,
     },
     filterLabelActive: {
         color: colors.primary,
-        fontWeight: "600"
+        fontWeight: "700"
     },
     list: {
         paddingBottom: 100,

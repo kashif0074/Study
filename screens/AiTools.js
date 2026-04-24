@@ -72,8 +72,27 @@ const Textarea = ({
 };
 
 export default function AITools({ route, notes = [] }) {
-    const { colors, updateUser, recordActivity } = useAuth();
+    const { colors, updateUser, recordActivity, addStudyTime, user } = useAuth();
     const styles = getStyles(colors);
+
+    // ✅ Track Study Time
+    useEffect(() => {
+        console.log("⏱️ AI Tools Timer Started");
+        const startTime = Date.now();
+        recordActivity();
+
+        return () => {
+            const endTime = Date.now();
+            const timeSpentMs = endTime - startTime;
+            const minutes = timeSpentMs / (1000 * 60);
+            
+            if (minutes > 0.1) {
+                console.log(`⏱️ Saving AI study time: ${minutes.toFixed(2)} mins`);
+                addStudyTime(minutes);
+            }
+        };
+    }, []);
+
     const [activeTab, setActiveTab] = useState("summarize");
     const [selectedNoteId, setSelectedNoteId] = useState("");
     const [inputText, setInputText] = useState("");
@@ -93,37 +112,95 @@ export default function AITools({ route, notes = [] }) {
     const [quizHistory, setQuizHistory] = useState([]);
     const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(false);
     const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
-    const { user } = useAuth();
 
-    // ✅ Handle navigation from NotesScreen
+    // ✅ Handle navigation from NotesScreen or NoteDetailScreen
     useEffect(() => {
-        if (route?.params) {
-            const { noteContent, noteTitle, autoGenerateSummary, autoGenerateQuiz, tab } = route.params;
+        const handleIncomingData = async () => {
+            if (route?.params) {
+                const { noteContent, noteTitle, autoGenerateSummary, autoGenerateQuiz, tab, fileUrl, noteType } = route.params;
 
-            if (noteContent) {
-                setInputText(noteContent);
-            }
+                let textToProcess = "";
+                let filesToProcess = [];
 
-            if (tab) {
-                setActiveTab(tab);
-            }
+                if (noteContent && noteType === "text") {
+                    textToProcess = noteContent;
+                    setInputText(noteContent);
+                }
 
-            if (autoGenerateSummary) {
-                setIsAutoGenerating(true);
-                setTimeout(() => {
-                    handleSummarize();
-                    setIsAutoGenerating(false);
-                }, 1000);
-            }
+                if (tab) {
+                    setActiveTab(tab);
+                }
 
-            if (autoGenerateQuiz) {
-                setIsAutoGenerating(true);
-                setTimeout(() => {
-                    handleGenerateQuiz();
-                    setIsAutoGenerating(false);
-                }, 1000);
+                // If it's a file, we need to process it
+                if (fileUrl && noteType !== "text") {
+                    const fileName = noteTitle || "Linked File";
+                    const fileExt = fileUrl.split('.').pop().toLowerCase();
+                    
+                    let aiFileType = "document";
+                    let aiFileIcon = "document";
+                    let aiFileColor = colors.primary;
+
+                    if (noteType === "pdf" || fileExt === 'pdf') {
+                        aiFileType = "PDF";
+                        aiFileIcon = "document";
+                        aiFileColor = colors.danger;
+                    } else if (noteType === "image") {
+                        aiFileType = "IMAGE";
+                        aiFileIcon = "image";
+                        aiFileColor = colors.primary;
+                    } else if (noteType === "voice") {
+                        aiFileType = "AUDIO";
+                        aiFileIcon = "mic";
+                        aiFileColor = colors.success;
+                    }
+
+                    // For AI processing, we need the file locally if it's remote
+                    let localUri = fileUrl;
+                    if (fileUrl.startsWith('http')) {
+                        try {
+                            const downloadPath = `${FileSystem.cacheDirectory}${Date.now()}_${fileName.replace(/\s/g, '_')}.${fileExt}`;
+                            const downloadResult = await FileSystem.downloadAsync(fileUrl, downloadPath);
+                            localUri = downloadResult.uri;
+                        } catch (err) {
+                            console.error("Failed to download file for AI:", err);
+                        }
+                    }
+
+                    const linkedFile = {
+                        id: "linked_" + Date.now(),
+                        name: fileName,
+                        type: aiFileType,
+                        icon: aiFileIcon,
+                        color: aiFileColor,
+                        size: "Unknown",
+                        uri: localUri,
+                        mimeType: noteType === "pdf" ? "application/pdf" : 
+                                  noteType === "image" ? "image/jpeg" : 
+                                  noteType === "voice" ? "audio/mpeg" : "application/pdf"
+                    };
+
+                    filesToProcess = [linkedFile];
+                    setUploadedFiles(filesToProcess);
+                    
+                    if (noteContent) {
+                        textToProcess = noteContent;
+                        setInputText(noteContent);
+                    }
+                }
+
+                if (autoGenerateSummary || autoGenerateQuiz) {
+                    setIsAutoGenerating(true);
+                    // Small delay to ensure UI shows the indicator
+                    setTimeout(() => {
+                        if (autoGenerateSummary) handleSummarize(textToProcess, filesToProcess);
+                        if (autoGenerateQuiz) handleGenerateQuiz(textToProcess, filesToProcess);
+                        setIsAutoGenerating(false);
+                    }, 500);
+                }
             }
-        }
+        };
+
+        handleIncomingData();
     }, [route?.params]);
 
     // Load History on Mount
@@ -406,8 +483,11 @@ export default function AITools({ route, notes = [] }) {
         }
     };
 
-    const handleSummarize = async () => {
-        if (!inputText.trim() && uploadedFiles.length === 0) {
+    const handleSummarize = async (overrideText = null, overrideFiles = null) => {
+        const textToUse = overrideText !== null ? overrideText : inputText;
+        const filesToUse = overrideFiles !== null ? overrideFiles : uploadedFiles;
+
+        if (!textToUse.trim() && filesToUse.length === 0) {
             showToast("❌ No Content", "Upload files or type content first");
             return;
         }
@@ -418,7 +498,7 @@ export default function AITools({ route, notes = [] }) {
         try {
             // Convert files to base64 inlineData format
             const filesToSend = [];
-            for (const file of uploadedFiles) {
+            for (const file of filesToUse) {
                 // Ignore unsupported files
                 if (file.type === "DOC" || file.type === "PPT") {
                     showToast("⚠️ Note", `${file.name} is a format not supported directly by this AI model yet. Skipping it.`);
@@ -441,7 +521,7 @@ export default function AITools({ route, notes = [] }) {
             Format the output beautifully for a mobile app screen using markdown.
 
             Content to summarize:
-            ${inputText}`;
+            ${textToUse}`;
 
             const responseText = await askGemini(prompt, filesToSend);
             setSummary(responseText);
@@ -455,8 +535,11 @@ export default function AITools({ route, notes = [] }) {
         }
     };
 
-    const handleGenerateQuiz = async () => {
-        if (!inputText.trim() && uploadedFiles.length === 0) {
+    const handleGenerateQuiz = async (overrideText = null, overrideFiles = null) => {
+        const textToUse = overrideText !== null ? overrideText : inputText;
+        const filesToUse = overrideFiles !== null ? overrideFiles : uploadedFiles;
+
+        if (!textToUse.trim() && filesToUse.length === 0) {
             showToast("❌ No Content", "Upload files or add text first");
             return;
         }
@@ -469,7 +552,7 @@ export default function AITools({ route, notes = [] }) {
         try {
             // Convert files
             const filesToSend = [];
-            for (const file of uploadedFiles) {
+            for (const file of filesToUse) {
                 if (file.type === "DOC" || file.type === "PPT") continue;
                 try {
                     const base64 = await FileSystem.readAsStringAsync(file.uri, { encoding: 'base64' });
@@ -491,7 +574,7 @@ export default function AITools({ route, notes = [] }) {
             Do not include any text, markdown formatting, or explanations outside of the JSON array.
 
             Content:
-            ${inputText}`;
+            ${textToUse}`;
 
             const questions = await askGemini(prompt, filesToSend, true);
             

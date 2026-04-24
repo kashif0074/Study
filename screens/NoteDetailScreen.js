@@ -30,12 +30,32 @@ const verticalScale = (size) => screenHeight / 812 * size;
 export default function NoteDetailScreen() {
     const navigation = useNavigation();
     const route = useRoute();
-    const { colors } = useAuth();
+    const { colors, addStudyTime, recordActivity } = useAuth();
     const styles = getStyles(colors);
 
     // ✅ Get actual note data
     const note = route.params?.note || {};
-    
+
+    // ✅ Track Study Time & Record Activity
+    useEffect(() => {
+        if (!note || !note._id) return;
+        
+        console.log("⏱️ Study Timer Started for:", note.title);
+        const startTime = Date.now();
+        recordActivity(); // Also record activity when studying notes
+
+        return () => {
+            const endTime = Date.now();
+            const timeSpentMs = endTime - startTime;
+            const minutes = timeSpentMs / (1000 * 60);
+            
+            if (minutes > 0.1) { // Only record if spent more than 6 seconds
+                console.log(`⏱️ Saving study time: ${minutes.toFixed(2)} mins for ${note.title}`);
+                addStudyTime(minutes);
+            }
+        };
+    }, []);
+
     // Determine the full URL for files (prepend server IP if it's a relative path)
     const getFullUrl = (url) => {
         if (!url) return null;
@@ -131,6 +151,26 @@ export default function NoteDetailScreen() {
                 } else {
                     Alert.alert("Download", `Downloaded "${note.content.substring(0, 30)}..."`);
                 }
+                break;
+            case "Summary":
+                navigation.navigate("AiTools", {
+                    noteContent: note.content,
+                    noteTitle: note.title,
+                    noteType: note.type,
+                    fileUrl: fileUrl,
+                    autoGenerateSummary: true,
+                    tab: "summarize"
+                });
+                break;
+            case "Quiz":
+                navigation.navigate("AiTools", {
+                    noteContent: note.content,
+                    noteTitle: note.title,
+                    noteType: note.type,
+                    fileUrl: fileUrl,
+                    autoGenerateQuiz: true,
+                    tab: "quiz"
+                });
                 break;
             case "Delete":
                 Alert.alert(
@@ -328,6 +368,14 @@ export default function NoteDetailScreen() {
                     <TouchableOpacity style={styles.actionButton} onPress={() => handleAction("Continue")}>
                         <Ionicons name="play-circle" size={scale(20)} color={colors.primary} />
                         <Text style={styles.actionText}>Continue</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.actionButton} onPress={() => handleAction("Summary")}>
+                        <Ionicons name="document-text-outline" size={scale(20)} color={colors.primary} />
+                        <Text style={styles.actionText}>Summary</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.actionButton} onPress={() => handleAction("Quiz")}>
+                        <Ionicons name="help-circle-outline" size={scale(20)} color={colors.primary} />
+                        <Text style={styles.actionText}>Quiz</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.actionButton} onPress={() => handleAction("Share")}>
                         <Ionicons name="share-outline" size={scale(20)} color={colors.primary} />

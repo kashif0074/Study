@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useEffect } from "react";
 import {
   View,
   Text,
@@ -17,8 +17,27 @@ import CONFIG from "../constants/config";
 
 export default function StudyPlanDetailScreen({ route, navigation }) {
   const { exam, sessions, allExams, allSessions } = route.params;
-  const { user, updateUser, colors, recordActivity } = useAuth();
+  const { user, updateUser, colors, recordActivity, addStudyTime } = useAuth();
   const { width, height } = useWindowDimensions();
+
+  // ✅ Track Study Time
+  useEffect(() => {
+    // Only import useEffect if it's missing, but it's already in the file... wait, let's check imports.
+    console.log("⏱️ Study Plan Detail Timer Started");
+    const startTime = Date.now();
+    recordActivity();
+
+    return () => {
+        const endTime = Date.now();
+        const timeSpentMs = endTime - startTime;
+        const minutes = timeSpentMs / (1000 * 60);
+        
+        if (minutes > 0.1) {
+            console.log(`⏱️ Saving Plan Detail study time: ${minutes.toFixed(2)} mins`);
+            addStudyTime(minutes);
+        }
+    };
+  }, []);
 
   const isTablet = width >= 768;
 
@@ -73,9 +92,8 @@ export default function StudyPlanDetailScreen({ route, navigation }) {
     // But better to just update the local display for immediate feedback.
     
     // We'll update the global user study time too
-    if (durationToAdd !== 0) {
-      const currentHours = user?.studyTime ?? 0;
-      updateUser({ studyTime: Math.max(0, Math.round((currentHours + durationToAdd) * 10) / 10) });
+    if (durationToAdd > 0) {
+      addStudyTime(durationToAdd * 60);
     }
 
     recordActivity();

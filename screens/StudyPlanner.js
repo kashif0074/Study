@@ -25,8 +25,26 @@ import { askGemini } from "../constants/gemini";
 import CONFIG from "../constants/config";
 
 export default function StudyPlanner({ navigation }) {
-  const { user, updateUser, colors, recordActivity } = useAuth();
+  const { user, updateUser, colors, recordActivity, addStudyTime } = useAuth();
   const { width, height } = useWindowDimensions();
+
+  // ✅ Track Study Time
+  useEffect(() => {
+    console.log("⏱️ Study Planner Timer Started");
+    const startTime = Date.now();
+    recordActivity();
+
+    return () => {
+        const endTime = Date.now();
+        const timeSpentMs = endTime - startTime;
+        const minutes = timeSpentMs / (1000 * 60);
+        
+        if (minutes > 0.1) {
+            console.log(`⏱️ Saving Planner study time: ${minutes.toFixed(2)} mins`);
+            addStudyTime(minutes);
+        }
+    };
+  }, []);
 
   const isSmallDevice = width < 375;
   const isTablet = width >= 768;
@@ -408,9 +426,8 @@ export default function StudyPlanner({ navigation }) {
     setStudySessions(updatedSessions);
     syncStudyPlan(exams, updatedSessions);
 
-    if (durationToAdd !== 0) {
-      const currentHours = user?.studyTime ?? 0;
-      updateUser({ studyTime: Math.max(0, Math.round((currentHours + durationToAdd) * 10) / 10) });
+    if (durationToAdd > 0) {
+      addStudyTime(durationToAdd * 60);
     }
 
     recordActivity();

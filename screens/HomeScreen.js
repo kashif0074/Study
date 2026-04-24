@@ -25,7 +25,7 @@ import { Share as RNShare } from "react-native";
 // ----- Main Screen -----
 export default function HomeScreen() {
     const navigation = useNavigation();
-    const { user, setShowAuth, colors } = useAuth();
+    const { user, setShowAuth, colors, recordActivity } = useAuth();
     const shimmerAnim = useRef(new Animated.Value(0)).current;
     const fabScale = useRef(new Animated.Value(1)).current;
     const [activeTab, setActiveTab] = useState("Recent");
@@ -63,6 +63,7 @@ export default function HomeScreen() {
     useFocusEffect(
         React.useCallback(() => {
             if (user && user.uid) {
+                recordActivity(); // ✅ Record daily activity for streak
                 fetch(`${CONFIG.API_URLS.NOTES}?userId=${user.uid}`)
                     .then((res) => res.json())
                     .then((data) => {
@@ -300,7 +301,7 @@ export default function HomeScreen() {
                         <StatCard label="Study Streak" value={`${user?.studyStreak ?? 0} days`} color={colors.secondary} />
                         <StatCard label="Notes Created" value={`${user ? totalNotesCount : 0}`} color={colors.primary} />
                         <StatCard label="Quiz Score" value={user?.quizScore ?? "0%"} color={colors.secondary} />
-                        <StatCard label="Study Time" value={`${user?.studyTime ?? 0} hrs`} color={colors.accent} />
+                        <StatCard label="Study Time" value={`${user?.studyTime ? parseFloat(user.studyTime).toFixed(1) : 0} hrs`} color={colors.accent} />
                     </View>
                 </LinearGradient>
 

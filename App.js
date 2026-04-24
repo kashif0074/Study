@@ -131,21 +131,31 @@ function AppContent() {
   // 🔥 IMPORTANT: Agar admin logged in hai to directly Admin Dashboard dikhao
   if (user?.isAdmin && !showAdminDashboard) {
     return (
-      <>
+      <SafeAreaProvider>
         <AdminDashboard onBack={() => setShowAdminDashboard(false)} />
         <Toast />
-      </>
+      </SafeAreaProvider>
     );
   }
 
-  // Normal user flow
+  // Normal / Guest flow
   return (
     <NavigationContainer>
-      <MainTabs />
+      {!user ? (
+        // 🏠 GUEST MODE: Only Home screen is visible, no bottom tabs
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="Home" component={HomeStackScreen} />
+        </Stack.Navigator>
+      ) : (
+        // 📱 AUTHENTICATED: Full access with Bottom Tabs
+        <MainTabs />
+      )}
+
       {showAuth && (
         <AuthScreen
           visible={true}
           onClose={closeAuth}
+          isGuestMode={false} // Allow closing to return to Guest Dashboard
         />
       )}
       <Toast />

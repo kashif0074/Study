@@ -15,7 +15,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../context/AuthContext";
 
-export default function AuthScreen({ visible, onClose }) {
+export default function AuthScreen({ visible, onClose, isGuestMode = false }) {
     const { login, signup, colors } = useAuth();
     const styles = getStyles(colors);
 
@@ -109,10 +109,12 @@ export default function AuthScreen({ visible, onClose }) {
                 style={styles.modalOverlay}
             >
                 <View style={styles.modal}>
-                    {/* Close Button */}
-                    <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
-                        <Ionicons name="close" size={28} color={colors.subText} />
-                    </TouchableOpacity>
+                    {/* Close Button - Hidden in Guest Mode */}
+                    {!isGuestMode && (
+                        <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
+                            <Ionicons name="close" size={28} color={colors.subText} />
+                        </TouchableOpacity>
+                    )}
 
                     <ScrollView 
                         contentContainerStyle={styles.container}
