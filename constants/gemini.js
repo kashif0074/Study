@@ -1,5 +1,5 @@
 // constants/gemini.js
-export const GEMINI_API_KEY = "AIzaSyBage3EpG4eZAcFiQuhIxaAG2nDOYY9qS8";
+export const GEMINI_API_KEY = "AIzaSyBr1_dawV7jabjQY2S2ReUKgA7ImZVrsGk";
 
 /**
  * Sends a prompt to the Google Gemini API.

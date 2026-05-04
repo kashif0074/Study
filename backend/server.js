@@ -19,16 +19,25 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 const connectDB = async () => {
     try {
         await mongoose.connect(process.env.MONGO_URI, {
-            dbName: 'StudySpark' // Default database name
+            dbName: 'StudySpark',
+            serverSelectionTimeoutMS: 5000, // Timeout after 5 seconds instead of 30
+            family: 4, // Force IPv4 (fixes many connection issues in Node 17+)
         });
         console.log("✅ MongoDB Connected Successfully to StudySpark");
     } catch (err) {
         console.error("❌ MongoDB Connection Failed!");
         console.error("Error Message:", err.message);
+        
+        if (err.message.includes('SSL') || err.message.includes('handshake')) {
+            console.log("\n⚠️ SSL/TLS HANDSHAKE ERROR DETECTED:");
+            console.log("This usually means your IP is not whitelisted in MongoDB Atlas.");
+        }
+
         console.log("\n💡 Troubleshooting Tips:");
-        console.log("1. Check if your MongoDB Atlas cluster is PAUSED.");
+        console.log("1. Run 'node check-ip.js' to see your public IP.");
         console.log("2. Ensure your IP is whitelisted in Atlas Network Access.");
-        console.log("3. Verify the MONGO_URI in your .env file.");
+        console.log("3. Verify your Wi-Fi or VPN isn't blocking MongoDB (Port 27017).");
+        console.log("4. Check the MONGO_URI in your .env file.");
     }
 };
 

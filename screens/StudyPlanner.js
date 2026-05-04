@@ -452,15 +452,26 @@ export default function StudyPlanner({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar
-        backgroundColor="transparent"
-        translucent={true}
-        barStyle="light-content"
-      />
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={[styles.scroll, { maxWidth: responsiveWidth, alignSelf: 'center', width: '100%' }]}
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* This view ensures the top status bar area is purple to match the header */}
+      <View style={{ 
+        position: 'absolute', 
+        top: 0, 
+        left: 0, 
+        right: 0, 
+        height: verticalScale(100), 
+        backgroundColor: colors.primary 
+      }} />
+      
+      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
+        <StatusBar
+          backgroundColor="transparent"
+          translucent={true}
+          barStyle="light-content"
+        />
+        <ScrollView
+          style={styles.container}
+          contentContainerStyle={[styles.scroll, { maxWidth: responsiveWidth, alignSelf: 'center', width: '100%', flexGrow: 1 }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
@@ -738,15 +749,16 @@ export default function StudyPlanner({ navigation }) {
           </SafeAreaView>
         </KeyboardAvoidingView >
       </Modal >
-    </SafeAreaView >
-  );
+    </SafeAreaView>
+  </View >
+);
 }
 
 // ✅ RESPONSIVE STYLESHEET
 const getStyles = (colors, scale, verticalScale, moderateScale, isTablet) => StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.primary,
+    backgroundColor: 'transparent',
     paddingTop: Platform.OS === 'android' ? 25 : 0,
   },
   container: {

@@ -156,10 +156,17 @@ export default function AITools({ route, notes = [] }) {
 
                     // For AI processing, we need the file locally if it's remote
                     let localUri = fileUrl;
-                    if (fileUrl.startsWith('http')) {
+                    let downloadUrl = fileUrl;
+
+                    if (fileUrl.startsWith('/uploads')) {
+                        const baseUrl = CONFIG.API_URLS.NOTES.split('/api')[0];
+                        downloadUrl = `${baseUrl}${fileUrl}`;
+                    }
+
+                    if (downloadUrl.startsWith('http')) {
                         try {
                             const downloadPath = `${FileSystem.cacheDirectory}${Date.now()}_${fileName.replace(/\s/g, '_')}.${fileExt}`;
-                            const downloadResult = await FileSystem.downloadAsync(fileUrl, downloadPath);
+                            const downloadResult = await FileSystem.downloadAsync(downloadUrl, downloadPath);
                             localUri = downloadResult.uri;
                         } catch (err) {
                             console.error("Failed to download file for AI:", err);
@@ -242,6 +249,40 @@ export default function AITools({ route, notes = [] }) {
         } catch (error) {
             console.error(`Error saving ${type} to history:`, error);
         }
+    };
+
+    const deleteHistory = async (id, type) => {
+        Alert.alert(
+            "Delete History",
+            "Are you sure you want to delete this item?",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Delete",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            const response = await fetch(`${CONFIG.API_URLS.AI_HISTORY}/${id}`, {
+                                method: 'DELETE',
+                            });
+                            if (response.ok) {
+                                if (type === "summary") {
+                                    setSummaryHistory(prev => prev.filter(item => item._id !== id));
+                                } else {
+                                    setQuizHistory(prev => prev.filter(item => item._id !== id));
+                                }
+                                showToast("✅ Deleted", "History item removed successfully.");
+                            } else {
+                                showToast("❌ Error", "Failed to delete item.");
+                            }
+                        } catch (error) {
+                            console.error("Delete history error:", error);
+                            showToast("❌ Error", "Network error. Failed to delete item.");
+                        }
+                    }
+                }
+            ]
+        );
     };
 
     const deriveTitle = (defaultPrefix) => {
@@ -483,9 +524,19 @@ export default function AITools({ route, notes = [] }) {
         }
     };
 
+    const resetAIState = () => {
+        setSummary("");
+        setQuiz([]);
+        setShowResults(false);
+        setQuizAnswers({});
+        setInputText("");
+        setUploadedFiles([]);
+        setSelectedNoteId("");
+    };
+
     const handleSummarize = async (overrideText = null, overrideFiles = null) => {
-        const textToUse = overrideText !== null ? overrideText : inputText;
-        const filesToUse = overrideFiles !== null ? overrideFiles : uploadedFiles;
+        const textToUse = typeof overrideText === 'string' ? overrideText : inputText;
+        const filesToUse = Array.isArray(overrideFiles) ? overrideFiles : uploadedFiles;
 
         if (!textToUse.trim() && filesToUse.length === 0) {
             showToast("❌ No Content", "Upload files or type content first");
@@ -536,8 +587,8 @@ export default function AITools({ route, notes = [] }) {
     };
 
     const handleGenerateQuiz = async (overrideText = null, overrideFiles = null) => {
-        const textToUse = overrideText !== null ? overrideText : inputText;
-        const filesToUse = overrideFiles !== null ? overrideFiles : uploadedFiles;
+        const textToUse = typeof overrideText === 'string' ? overrideText : inputText;
+        const filesToUse = Array.isArray(overrideFiles) ? overrideFiles : uploadedFiles;
 
         if (!textToUse.trim() && filesToUse.length === 0) {
             showToast("❌ No Content", "Upload files or add text first");
@@ -737,6 +788,7 @@ export default function AITools({ route, notes = [] }) {
                                                 setActiveTab("summarize");
                                                 setIsLeftSidebarOpen(false);
                                             }}
+                                            onLongPress={() => deleteHistory(item._id, "summary")}
                                         >
                                             <Ionicons name="document-text" size={scale(18)} color={colors.primary} />
                                             <View style={styles.historyItemInfo}>
@@ -785,6 +837,7 @@ export default function AITools({ route, notes = [] }) {
                                                 setQuizAnswers({});
                                                 setIsRightSidebarOpen(false);
                                             }}
+                                            onLongPress={() => deleteHistory(item._id, "quiz")}
                                         >
                                             <Ionicons name="bulb" size={scale(18)} color={colors.warning} />
                                             <View style={styles.historyItemInfo}>
@@ -885,6 +938,9 @@ export default function AITools({ route, notes = [] }) {
                                         </TouchableOpacity>
                                     </View>
                                     <Text style={styles.resultText}>{summary}</Text>
+                                    <TouchableOpacity style={[styles.submitBtn, { backgroundColor: colors.primary, marginTop: 20 }]} onPress={resetAIState}>
+                                        <Text style={styles.submitBtnText}>Next Summary</Text>
+                                    </TouchableOpacity>
                                 </View>
                             ) : null}
                         </View>
@@ -986,6 +1042,10 @@ export default function AITools({ route, notes = [] }) {
                                             <Text style={styles.submitBtnText}> Submit & Check Answers</Text>
                                         </TouchableOpacity>
                                     )}
+
+                                    <TouchableOpacity style={[styles.submitBtn, { backgroundColor: colors.primary, marginTop: 15 }]} onPress={resetAIState}>
+                                        <Text style={styles.submitBtnText}>Next Quiz</Text>
+                                    </TouchableOpacity>
                                 </>
                             )}
                         </View>
