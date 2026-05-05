@@ -23,20 +23,28 @@ const upload = multer({
 
 // ==================== GET ALL NOTES OF A USER ====================
 router.get('/', async (req, res) => {
+    const logFile = path.join(__dirname, '../request_logs.txt');
+    const fs = require('fs');
     try {
         const { userId } = req.query; 
-        console.log(`📡 Incoming GET request for userId: ${userId}`);
+        const logMsg = `[${new Date().toISOString()}] 📡 GET /notes?userId=${userId}\n`;
+        fs.appendFileSync(logFile, logMsg);
 
         if (!userId) {
+            fs.appendFileSync(logFile, `⚠️ Missing userId\n`);
             return res.status(400).json({ message: "userId is required" });
         }
 
+        const start = Date.now();
         const notes = await Note.find({ userId })
             .sort({ createdAt: -1 });
+        const duration = Date.now() - start;
 
+        fs.appendFileSync(logFile, `✅ Found ${notes.length} notes in ${duration}ms\n`);
         res.status(200).json(notes);
     } catch (error) {
-        console.error("Error fetching notes:", error);
+        fs.appendFileSync(logFile, `❌ Error: ${error.message}\n`);
+        console.error("❌ Error fetching notes:", error);
         res.status(500).json({ message: "Server error while fetching notes" });
     }
 });

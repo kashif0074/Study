@@ -19,12 +19,26 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage: storage });
 
+const User = require('../models/User');
+
 // --- COMMUTINIES ---
 
 // Get all communities
 router.get('/', async (req, res) => {
     try {
-        const userId = req.query.userId;
+        const { userId, email } = req.query;
+
+        // Check if user is banned
+        if (email) {
+            const user = await User.findOne({ email: email.toLowerCase() });
+            if (user && user.isBanned) {
+                return res.status(403).json({ 
+                    message: "Access restricted. Your account is banned.",
+                    isBanned: true 
+                });
+            }
+        }
+        
         let communities = await Community.find().sort({ membersCount: -1 });
         
         // Seed default communities if none exist

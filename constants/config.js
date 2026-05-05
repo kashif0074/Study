@@ -1,9 +1,9 @@
 // constants/config.js
 import { Platform } from 'react-native';
 
-// Your computer's local IP address discovered via ipconfig: 192.168.0.107
+// Your computer's local IP address discovered via ipconfig: 10.87.94.119
 // This allows physical devices on the same Wi-Fi to connect to the backend
-export const API_BASE_URL = 'http://192.168.0.107:5000/api';
+export const API_BASE_URL = 'http://10.87.94.119:5000/api';
 
 export const CONFIG = {
     API_URLS: {
@@ -12,6 +12,7 @@ export const CONFIG = {
         STUDY_PLANS: `${API_BASE_URL}/study-plans`,
         AI_HISTORY: `${API_BASE_URL}/ai-history`,
         COMMUNITIES: `${API_BASE_URL}/communities`,
+        ADMIN: `${API_BASE_URL}/admin`,
     }
 };
 

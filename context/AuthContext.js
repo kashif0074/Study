@@ -8,7 +8,9 @@ import {
   onAuthStateChanged, 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
-  signOut 
+  signOut,
+  sendPasswordResetEmail,
+  updateProfile
 } from 'firebase/auth';
 
 const ADMIN_EMAIL = "admin@studyspark.com";
@@ -20,8 +22,6 @@ export const AuthProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
     const [showAuth, setShowAuth] = useState(false);
     const [darkMode, setDarkMode] = useState(false);
-    const [isAdmin, setIsAdmin] = useState(false); // Admin mode state
-
     useEffect(() => {
         console.log("🔥 Auth Listener Started");
 
@@ -31,16 +31,6 @@ export const AuthProvider = ({ children }) => {
                 const isAdminUser = cleanEmail === ADMIN_EMAIL.toLowerCase();
 
                 console.log("📌 Auth State Changed → Email:", cleanEmail, "| isAdmin:", isAdminUser);
-
-                // Agar admin hai to automatically admin mode ON
-                if (isAdminUser) {
-                    setIsAdmin(true);
-                    await AsyncStorage.setItem('adminMode', 'true');
-                } else {
-                    // Normal user ke liye saved admin mode check karo
-                    const savedAdminMode = await AsyncStorage.getItem('adminMode');
-                    setIsAdmin(savedAdminMode === 'true');
-                }
 
                 // Fetch MongoDB profile data to merge with Firebase user
                 let mongoProfile = {};
@@ -54,16 +44,45 @@ export const AuthProvider = ({ children }) => {
                     console.warn("⚠️ Could not fetch MongoDB profile:", err);
                 }
 
-                setUser({
-                    ...currentUser,
-                    ...mongoProfile,
-                    uid: currentUser.uid, // Ensure uid is preserved
-                    isAdmin: isAdminUser
+                const emailFallback = cleanEmail.split('@')[0];
+                const backendName = mongoProfile.name;
+                const firebaseName = currentUser.displayName;
+                
+                setUser(prev => {
+                    const existingName = prev?.name;
+                    
+                    // Determine if names are generic (Student, User, or email prefix)
+                    const isGeneric = (n) => !n || n === "Student" || n === "User" || n === "Loading..." || n === emailFallback;
+                    
+                    // Priority Order:
+                    // 1. Valid name from MongoDB
+                    // 2. Existing name in state (from signup/update)
+                    // 3. Valid name from Firebase Profile
+                    // 4. Email prefix (last resort)
+                    
+                    let resolvedName = "User";
+                    
+                    if (!isGeneric(backendName)) {
+                        resolvedName = backendName;
+                    } else if (!isGeneric(existingName)) {
+                        resolvedName = existingName;
+                    } else if (!isGeneric(firebaseName)) {
+                        resolvedName = firebaseName;
+                    } else {
+                        resolvedName = emailFallback || "User";
+                    }
+
+                    return {
+                        ...currentUser,
+                        ...mongoProfile,
+                        name: resolvedName,
+                        uid: currentUser.uid,
+                        isAdmin: isAdminUser
+                    };
                 });
             } else {
                 console.log("👤 No user logged in");
                 setUser(null);
-                setIsAdmin(false);
             }
             setLoading(false);
         });
@@ -86,12 +105,6 @@ export const AuthProvider = ({ children }) => {
 
             console.log("✅ Login Successful → Email:", email, "| isAdmin:", isAdminUser);
 
-            // Agar admin hai to automatically admin mode ON
-            if (isAdminUser) {
-                setIsAdmin(true);
-                await AsyncStorage.setItem('adminMode', 'true');
-            }
-
             setUser({
                 ...loggedInUser,
                 isAdmin: isAdminUser
@@ -111,6 +124,17 @@ export const AuthProvider = ({ children }) => {
 
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const newUser = userCredential.user;
+
+        // Send Email Verification
+        try {
+            await sendEmailVerification(newUser);
+            console.log("📧 Verification email sent");
+        } catch (err) {
+            console.error("❌ Verification Email Error:", err);
+        }
+
+        // Update Firebase Display Name
+        await updateProfile(newUser, { displayName: name });
         const isAdminUser = email === ADMIN_EMAIL.toLowerCase();
 
         // Sync with MongoDB backend
@@ -125,12 +149,6 @@ export const AuthProvider = ({ children }) => {
             console.error("❌ MongoDB Signup Error:", err);
         }
 
-        // Admin signup ho to admin mode ON
-        if (isAdminUser) {
-            setIsAdmin(true);
-            await AsyncStorage.setItem('adminMode', 'true');
-        }
-
         setUser({
             ...newUser,
             name: name,
@@ -142,8 +160,28 @@ export const AuthProvider = ({ children }) => {
 
     const logout = async () => {
         await signOut(auth);
-        setIsAdmin(false);
-        await AsyncStorage.removeItem('adminMode');
+    };
+
+    const resetPassword = async (email) => {
+        try {
+            const cleanEmail = email.trim().toLowerCase();
+            console.log("📨 Attempting to send reset email to:", cleanEmail);
+            await sendPasswordResetEmail(auth, cleanEmail);
+            return { success: true };
+        } catch (error) {
+            console.error("❌ Reset Password Error:", error.code, error.message);
+            
+            let message = "Failed to send reset link.";
+            if (error.code === 'auth/user-not-found') {
+                message = "No user found with this email address.";
+            } else if (error.code === 'auth/invalid-email') {
+                message = "Invalid email address format.";
+            } else if (error.code === 'auth/too-many-requests') {
+                message = "Too many requests. Please try again later.";
+            }
+            
+            throw new Error(message);
+        }
     };
 
     const toggleDarkMode = async () => {
@@ -152,11 +190,6 @@ export const AuthProvider = ({ children }) => {
         await AsyncStorage.setItem('darkMode', JSON.stringify(newValue));
     };
 
-    const toggleAdminMode = async () => {
-        const newValue = !isAdmin;
-        setIsAdmin(newValue);
-        await AsyncStorage.setItem('adminMode', JSON.stringify(newValue));
-    };
 
     const triggerAuth = () => setShowAuth(true);
     const closeAuth = () => setShowAuth(false);
@@ -247,9 +280,9 @@ export const AuthProvider = ({ children }) => {
             darkMode,
             toggleDarkMode,
             colors,
-            isAdmin,
-            toggleAdminMode,
+            isAdmin: user?.isAdmin || false,
             updateUser,
+            resetPassword,
             recordActivity,
             addStudyTime
         }}>

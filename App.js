@@ -117,9 +117,7 @@ export default function App() {
 // Main App Content - Handles Admin Redirect
 function AppContent() {
   const { user, loading, isAdmin, colors, showAuth, closeAuth } = useAuth();
-  const [showAdminDashboard, setShowAdminDashboard] = useState(false);
 
-  // Show loading indicator
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors?.background || '#FFFFFF' }}>
@@ -127,12 +125,11 @@ function AppContent() {
       </View>
     );
   }
-
   // 🔥 IMPORTANT: Agar admin logged in hai to directly Admin Dashboard dikhao
-  if (user?.isAdmin && !showAdminDashboard) {
+  if (user?.isAdmin) {
     return (
       <SafeAreaProvider>
-        <AdminDashboard onBack={() => setShowAdminDashboard(false)} />
+        <AdminDashboard />
         <Toast />
       </SafeAreaProvider>
     );
@@ -171,6 +168,7 @@ function MainTabs() {
 
   return (
     <Tab.Navigator
+      initialRouteName="Home"
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarStyle: {

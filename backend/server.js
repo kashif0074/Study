@@ -7,8 +7,10 @@ const path = require('path');
 
 dotenv.config();
 
+console.log("🎬 Server script starting...");
 const app = express();
 const PORT = process.env.PORT || 5000;
+console.log(`📌 Target PORT: ${PORT}`);
 
 // Middleware
 app.use(cors());
@@ -20,8 +22,7 @@ const connectDB = async () => {
     try {
         await mongoose.connect(process.env.MONGO_URI, {
             dbName: 'StudySpark',
-            serverSelectionTimeoutMS: 5000, // Timeout after 5 seconds instead of 30
-            family: 4, // Force IPv4 (fixes many connection issues in Node 17+)
+            serverSelectionTimeoutMS: 5000, // Timeout after 5 seconds
         });
         console.log("✅ MongoDB Connected Successfully to StudySpark");
     } catch (err) {
@@ -41,7 +42,9 @@ const connectDB = async () => {
     }
 };
 
+console.log("⏳ Connecting to DB...");
 connectDB();
+console.log("✅ connectDB() called (async)");
 
 // Test Route
 app.get('/', (req, res) => {
@@ -54,6 +57,7 @@ const noteRoutes = require('./routes/notes');
 const studyPlanRoutes = require('./routes/studyPlans');
 const aiHistoryRoutes = require('./routes/aiHistory');
 const communityRoutes = require('./routes/communities');
+const adminRoutes = require('./routes/admin');
 
 // Use Routes
 app.use('/api/auth', authRoutes);
@@ -61,6 +65,7 @@ app.use('/api/notes', noteRoutes);
 app.use('/api/study-plans', studyPlanRoutes);
 app.use('/api/ai-history', aiHistoryRoutes);
 app.use('/api/communities', communityRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Start Server
 app.listen(PORT, '0.0.0.0', () => {

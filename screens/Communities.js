@@ -172,7 +172,7 @@ const PostCard = ({ post, onLike, onComment, isAdmin, onAdminAction }) => {
     );
 };
 
-export default function Communities() {
+export default function Communities({ onBack }) {
     const { width } = useWindowDimensions();
     const isTablet = width >= 768;
     const { colors, isAdmin, user } = useAuth();
@@ -182,6 +182,7 @@ export default function Communities() {
     const [showCreateCommunity, setShowCreateCommunity] = useState(false);
     const [selectedCommunity, setSelectedCommunity] = useState(null);
     const [editingCommunity, setEditingCommunity] = useState(null);
+    const [showAllMyCommunities, setShowAllMyCommunities] = useState(false);
     const [loading, setLoading] = useState(true);
 
     const getCommunityColor = (subject) => {
@@ -212,7 +213,7 @@ export default function Communities() {
         if (!user?.uid) return;
         setLoading(true);
         try {
-            const resp = await fetch(`${CONFIG.API_URLS.COMMUNITIES}?userId=${user.uid}`);
+            const resp = await fetch(`${CONFIG.API_URLS.COMMUNITIES}?userId=${user.uid}&email=${user.email}`);
             const data = await resp.json();
             if (Array.isArray(data)) {
                 const formatted = data.map(c => ({ ...c, id: c._id }));
@@ -495,6 +496,11 @@ export default function Communities() {
             >
                 {/* Header */}
                 <View style={styles.header}>
+                    {onBack && (
+                        <TouchableOpacity onPress={onBack} style={{ marginRight: 15 }}>
+                            <Ionicons name="arrow-back" size={isTablet ? 36 : 28} color={colors.white} />
+                        </TouchableOpacity>
+                    )}
                     <Ionicons name="people" size={isTablet ? 44 : 36} color={colors.white} />
                     <View style={styles.headerText}>
                         <Text style={styles.headerTitle}>Communities</Text>
@@ -502,7 +508,16 @@ export default function Communities() {
                     </View>
                 </View>
 
-                <View style={styles.content}>
+                {user?.isBanned ? (
+                    <View style={[styles.content, { alignItems: 'center', justifyContent: 'center', marginTop: 100 }]}>
+                        <Ionicons name="lock-closed" size={80} color={colors.danger} />
+                        <Text style={[styles.sectionTitle, { marginTop: 20, textAlign: 'center' }]}>Access Restricted</Text>
+                        <Text style={[styles.discoverDesc, { textAlign: 'center', marginTop: 10 }]}>
+                            Your account has been restricted by the administrator. You are no longer able to view or participate in communities.
+                        </Text>
+                    </View>
+                ) : (
+                    <View style={styles.content}>
                     {/* Search */}
                     <View style={styles.searchBar}>
                         <Ionicons name="search" size={isTablet ? 24 : 20} color={colors.placeholder} />
@@ -525,127 +540,166 @@ export default function Communities() {
                     </TouchableOpacity>
 
                     {/* My Communities */}
-                    {communities.filter(c => c.isJoined).length > 0 && (
+                    {(isAdmin ? communities.length > 0 : communities.filter(c => c.isJoined).length > 0) && (
                         <>
                             <View style={styles.sectionHeader}>
-                                <Text style={styles.sectionTitle}>My Communities</Text>
-                                <TouchableOpacity onPress={() => {
-                                    // Filter to show only joined communities
-                                    setSearchQuery("");
-                                }}>
-                                    <Text style={styles.seeAllText}>See All</Text>
+                                <Text style={styles.sectionTitle}>
+                                    {showAllMyCommunities ? "All My Communities" : "My Communities"}
+                                </Text>
+                                <TouchableOpacity onPress={() => setShowAllMyCommunities(!showAllMyCommunities)}>
+                                    <Text style={styles.seeAllText}>
+                                        {showAllMyCommunities ? "Show Less" : "See All"}
+                                    </Text>
                                 </TouchableOpacity>
                             </View>
 
-                            <ScrollView
-                                horizontal
-                                showsHorizontalScrollIndicator={false}
-                                style={styles.myCommunitiesScroll}
-                            >
-                                {communities.filter(c => c.isJoined).map(community => (
-                                    <TouchableOpacity
-                                        key={community._id || community.id}
-                                        style={styles.myCommunityCard}
-                                        onPress={() => openCommunity(community)}
-                                    >
-                                        <View style={[styles.communityColor, { backgroundColor: community.color }]}>
-                                            <Ionicons name="people" size={isTablet ? 36 : 28} color={colors.white} />
-                                            {community.createdBy === user?.uid && (
-                                                <View style={styles.userCreatedBadge}>
-                                                    <Ionicons name="star" size={isTablet ? 16 : 12} color={colors.warning} />
+                            {showAllMyCommunities ? (
+                                <View style={{ marginBottom: isTablet ? 32 : 24 }}>
+                                    {communities.filter(c => isAdmin || c.isJoined).map(community => (
+                                        <TouchableOpacity
+                                            key={community._id || community.id}
+                                            style={[styles.discoverCard, { marginBottom: 12 }]}
+                                            onPress={() => openCommunity(community)}
+                                        >
+                                            <View style={[styles.discoverColor, { backgroundColor: community.color }]}>
+                                                <Ionicons name="people" size={isTablet ? 28 : 24} color={colors.white} />
+                                            </View>
+                                            <View style={styles.discoverInfo}>
+                                                <View style={styles.discoverHeader}>
+                                                    <Text style={styles.discoverName}>{community.name}</Text>
+                                                    <Text style={styles.discoverSubject}>{community.subject}</Text>
                                                 </View>
+                                                <Text style={styles.discoverDesc} numberOfLines={1}>{community.description}</Text>
+                                            </View>
+                                            {isAdmin && (
+                                                <TouchableOpacity
+                                                    style={styles.adminEditBtn}
+                                                    onPress={() => setEditingCommunity(community)}
+                                                >
+                                                    <Ionicons name="settings" size={20} color={colors.primary} />
+                                                </TouchableOpacity>
                                             )}
-                                        </View>
-                                        <Text style={styles.myCommunityName} numberOfLines={1}>
-                                            {community.name}
-                                        </Text>
-                                        <Text style={styles.myCommunityMembers}>
-                                            {(community.membersCount || community.members || 0).toLocaleString()} members
-                                        </Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+                            ) : (
+                                <ScrollView
+                                    horizontal
+                                    showsHorizontalScrollIndicator={false}
+                                    style={styles.myCommunitiesScroll}
+                                >
+                                    {communities.filter(c => isAdmin || c.isJoined).map(community => (
+                                        <TouchableOpacity
+                                            key={community._id || community.id}
+                                            style={styles.myCommunityCard}
+                                            onPress={() => openCommunity(community)}
+                                        >
+                                            <View style={[styles.communityColor, { backgroundColor: community.color }]}>
+                                                <Ionicons name="people" size={isTablet ? 36 : 28} color={colors.white} />
+                                                {community.createdBy === user?.uid && (
+                                                    <View style={styles.userCreatedBadge}>
+                                                        <Ionicons name="star" size={isTablet ? 16 : 12} color={colors.warning} />
+                                                    </View>
+                                                )}
+                                            </View>
+                                            <Text style={styles.myCommunityName} numberOfLines={1}>
+                                                {community.name}
+                                            </Text>
+                                            <Text style={styles.myCommunityMembers}>
+                                                {(community.membersCount || community.members || 0).toLocaleString()} members
+                                            </Text>
 
-                                        {isAdmin && (
-                                            <TouchableOpacity
-                                                style={styles.adminEditBtn}
-                                                onPress={() => setEditingCommunity(community)}
-                                            >
-                                                <Ionicons name="settings" size={16} color={colors.primary} />
-                                                <Text style={styles.adminEditText}>Manage</Text>
-                                            </TouchableOpacity>
-                                        )}
-                                    </TouchableOpacity>
-                                ))}
-                            </ScrollView>
+                                            {isAdmin && (
+                                                <TouchableOpacity
+                                                    style={styles.adminEditBtn}
+                                                    onPress={() => setEditingCommunity(community)}
+                                                >
+                                                    <Ionicons name="settings" size={16} color={colors.primary} />
+                                                    <Text style={styles.adminEditText}>Manage</Text>
+                                                </TouchableOpacity>
+                                            )}
+                                        </TouchableOpacity>
+                                    ))}
+                                </ScrollView>
+                            )}
                         </>
                     )}
 
-                    {/* Discover */}
-                    <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>Discover More</Text>
-                        <Text style={styles.sectionCount}>
-                            {filteredCommunities.filter(c => !c.isJoined).length} available
-                        </Text>
-                    </View>
-
-                    {filteredCommunities.filter(c => !c.isJoined).length === 0 ? (
-                        <View style={styles.emptyState}>
-                            <Ionicons name="search" size={isTablet ? 64 : 48} color={colors.border} />
-                            <Text style={styles.emptyStateText}>No communities found</Text>
-                            <Text style={styles.emptyStateSubtext}>Try a different search term</Text>
-                        </View>
-                    ) : (
-                        filteredCommunities.filter(c => !c.isJoined).map(community => (
-                            <View key={community._id || community.id} style={styles.discoverCard}>
-                                <View style={[styles.discoverColor, { backgroundColor: community.color }]}>
-                                    <Ionicons name="people" size={isTablet ? 28 : 24} color={colors.white} />
-                                    {community.createdBy === user?.uid && (
-                                        <View style={styles.userCreatedSmallBadge}>
-                                            <Ionicons name="star" size={isTablet ? 14 : 10} color={colors.warning} />
-                                        </View>
-                                    )}
-                                </View>
-                                <View style={styles.discoverInfo}>
-                                    <View style={styles.discoverHeader}>
-                                        <Text style={styles.discoverName} numberOfLines={1}>
-                                            {community.name}
-                                        </Text>
-                                        <Text style={styles.discoverSubject}>{community.subject}</Text>
-                                    </View>
-                                    <Text style={styles.discoverDesc} numberOfLines={2}>
-                                        {community.description}
-                                    </Text>
-                                    <View style={styles.discoverStats}>
-                                        <Text style={styles.stat}>
-                                            <Ionicons name="people" size={isTablet ? 16 : 14} /> {(community.membersCount || community.members || 0).toLocaleString()}
-                                        </Text>
-                                        <Text style={styles.stat}>
-                                            • <Ionicons name="document-text" size={isTablet ? 16 : 14} /> {(community.postsCount || community.posts || 0).toLocaleString()} posts
-                                        </Text>
-                                    </View>
-                                </View>
-                                <TouchableOpacity
-                                    style={[
-                                        styles.joinBtn,
-                                        community.isJoined && styles.leaveBtn
-                                    ]}
-                                    onPress={() => community.isJoined ? leaveCommunity(community.id) : toggleJoin(community.id)}
-                                >
-                                    <Text style={styles.joinText}>
-                                        {community.isJoined ? 'Leave' : 'Join'}
-                                    </Text>
-                                </TouchableOpacity>
-
-                                {isAdmin && (
-                                    <TouchableOpacity
-                                        style={styles.adminDeleteBtn}
-                                        onPress={() => handleDeleteCommunity(community.id, community.name)}
-                                    >
-                                        <Ionicons name="trash" size={20} color={colors.danger} />
-                                    </TouchableOpacity>
-                                )}
+                    {!showAllMyCommunities && (
+                        <>
+                            {/* Discover */}
+                            <View style={styles.sectionHeader}>
+                                <Text style={styles.sectionTitle}>Discover More</Text>
+                                <Text style={styles.sectionCount}>
+                                    {isAdmin ? 0 : filteredCommunities.filter(c => !c.isJoined).length} available
+                                </Text>
                             </View>
-                        ))
+
+                            {(isAdmin ? [] : filteredCommunities.filter(c => !c.isJoined)).length === 0 ? (
+                                <View style={styles.emptyState}>
+                                    <Ionicons name="search" size={isTablet ? 64 : 48} color={colors.border} />
+                                    <Text style={styles.emptyStateText}>No communities found</Text>
+                                    <Text style={styles.emptyStateSubtext}>Try a different search term</Text>
+                                </View>
+                            ) : (
+                                filteredCommunities.filter(c => !c.isJoined).map(community => (
+                                    <View key={community._id || community.id} style={styles.discoverCard}>
+                                        <View style={[styles.discoverColor, { backgroundColor: community.color }]}>
+                                            <Ionicons name="people" size={isTablet ? 28 : 24} color={colors.white} />
+                                            {community.createdBy === user?.uid && (
+                                                <View style={styles.userCreatedSmallBadge}>
+                                                    <Ionicons name="star" size={isTablet ? 14 : 10} color={colors.warning} />
+                                                </View>
+                                            )}
+                                        </View>
+                                        <View style={styles.discoverInfo}>
+                                            <View style={styles.discoverHeader}>
+                                                <Text style={styles.discoverName} numberOfLines={1}>
+                                                    {community.name}
+                                                </Text>
+                                                <Text style={styles.discoverSubject}>{community.subject}</Text>
+                                            </View>
+                                            <Text style={styles.discoverDesc} numberOfLines={2}>
+                                                {community.description}
+                                            </Text>
+                                            <View style={styles.discoverStats}>
+                                                <Text style={styles.stat}>
+                                                    <Ionicons name="people" size={isTablet ? 16 : 14} /> {(community.membersCount || community.members || 0).toLocaleString()}
+                                                </Text>
+                                                <Text style={styles.stat}>
+                                                    • <Ionicons name="document-text" size={isTablet ? 16 : 14} /> {(community.postsCount || community.posts || 0).toLocaleString()} posts
+                                                </Text>
+                                            </View>
+                                        </View>
+                                        {!isAdmin && (
+                                            <TouchableOpacity
+                                                style={[
+                                                    styles.joinBtn,
+                                                    community.isJoined && styles.leaveBtn
+                                                ]}
+                                                onPress={() => community.isJoined ? leaveCommunity(community.id) : toggleJoin(community.id)}
+                                            >
+                                                <Text style={styles.joinText}>
+                                                    {community.isJoined ? 'Leave' : 'Join'}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        )}
+
+                                        {isAdmin && (
+                                            <TouchableOpacity
+                                                style={styles.adminDeleteBtn}
+                                                onPress={() => handleDeleteCommunity(community.id, community.name)}
+                                            >
+                                                <Ionicons name="trash" size={20} color={colors.danger} />
+                                            </TouchableOpacity>
+                                        )}
+                                    </View>
+                                ))
+                            )}
+                        </>
                     )}
                 </View>
+            )}
             </ScrollView>
 
             {/* Community Detail Modal */}

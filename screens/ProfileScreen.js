@@ -20,20 +20,19 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
 import { useAuth } from "../context/AuthContext";
-import AdminDashboard from "./AdminDashboard";
+
 import CONFIG from "../constants/config";
 
 export default function ProfileScreen() {
     const {
+        user,
         logout,
         isGuest,
         darkMode,
         toggleDarkMode,
-        isAdmin,
-        toggleAdminMode,
         colors,
-        user,
-        updateUser
+        updateUser,
+        isAdmin
     } = useAuth();
     const styles = getStyles(colors);
     const { width, height } = useWindowDimensions();
@@ -48,10 +47,9 @@ export default function ProfileScreen() {
 
     const [notifications, setNotifications] = useState(true);
     const [accountModal, setAccountModal] = useState(false);
-    const [adminDashboardOpen, setAdminDashboardOpen] = useState(false);
 
     const [profile, setProfile] = useState({
-        name: user?.name || "Student",
+        name: user?.name || "Loading...",
         email: user?.email || "",
         institution: user?.institution || "",
         major: user?.major || "",
@@ -430,55 +428,30 @@ export default function ProfileScreen() {
                             />
                         </View>
 
-                        <View style={[
-                            styles.settingRow,
-                            {
-                                backgroundColor: colors.card,
-                                padding: scale(isTablet ? 20 : isSmallScreen ? 14 : 16),
-                                borderRadius: scale(16),
-                                marginBottom: verticalScale(isTablet ? 16 : isSmallScreen ? 10 : 12),
-                            }
-                        ]}>
-                            <View style={[styles.settingLeft, { gap: scale(14) }]}>
-                                <Ionicons name="shield-checkmark-outline" size={scale(isTablet ? 26 : isSmallScreen ? 20 : 22)} color={colors.subText} />
-                                <Text style={[
-                                    styles.settingLabel,
-                                    {
-                                        color: colors.text,
-                                        fontSize: scale(isTablet ? 16 : isSmallScreen ? 14 : 15),
-                                    }
-                                ]}>Admin Mode (Developer)</Text>
-                            </View>
-                            <Switch
-                                value={isAdmin}
-                                onValueChange={toggleAdminMode}
-                                thumbColor={isAdmin ? colors.primary : colors.subText}
-                            />
-                        </View>
 
                         {isAdmin && (
                             <TouchableOpacity
                                 style={[
                                     styles.accountSettingsBtn,
                                     {
-                                        backgroundColor: colors.card,
+                                        backgroundColor: colors.primary + "10",
                                         padding: scale(isTablet ? 20 : isSmallScreen ? 14 : 16),
                                         borderRadius: scale(16),
                                         marginBottom: verticalScale(isTablet ? 16 : isSmallScreen ? 10 : 12),
-                                        borderColor: colors.primary,
                                         borderWidth: 1,
+                                        borderColor: colors.primary + "30",
                                     }
                                 ]}
-                                onPress={() => setAdminDashboardOpen(true)}
+                                onPress={() => setAdminView(true)}
                             >
                                 <View style={[styles.settingLeft, { gap: scale(14) }]}>
-                                    <Ionicons name="speedometer-outline" size={scale(isTablet ? 26 : isSmallScreen ? 20 : 22)} color={colors.primary} />
+                                    <Ionicons name="shield-checkmark-outline" size={scale(isTablet ? 26 : isSmallScreen ? 20 : 22)} color={colors.primary} />
                                     <Text style={[
                                         styles.settingLabel,
                                         {
                                             color: colors.primary,
                                             fontSize: scale(isTablet ? 16 : isSmallScreen ? 14 : 15),
-                                            fontWeight: '700'
+                                            fontWeight: "700",
                                         }
                                     ]}>Admin Dashboard</Text>
                                 </View>
@@ -817,10 +790,7 @@ export default function ProfileScreen() {
                 </View>
             </Modal >
 
-            {/* Admin Dashboard Modal */}
-            <Modal visible={adminDashboardOpen} animationType="slide" statusBarTranslucent>
-                <AdminDashboard onBack={() => setAdminDashboardOpen(false)} />
-            </Modal>
+
         </SafeAreaView >
     );
 }

@@ -12,6 +12,7 @@ import {
     Modal,
     Alert,
 } from "react-native";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../context/AuthContext";
 
@@ -27,6 +28,23 @@ export default function AuthScreen({ visible, onClose, isGuestMode = false }) {
     const [agree, setAgree] = useState(false);
     const [remember, setRemember] = useState(false);
     const [isForgot, setIsForgot] = useState(false);
+    const { resetPassword } = useAuth();
+
+    // Load remembered email on mount
+    React.useEffect(() => {
+        const loadRememberedEmail = async () => {
+            try {
+                const savedEmail = await AsyncStorage.getItem('rememberedEmail');
+                if (savedEmail) {
+                    setEmail(savedEmail);
+                    setRemember(true);
+                }
+            } catch (error) {
+                console.error("Error loading remembered email:", error);
+            }
+        };
+        loadRememberedEmail();
+    }, []);
 
     const CheckBox = ({ checked, onPress }) => (
         <TouchableOpacity onPress={onPress} style={styles.checkboxContainer}>
@@ -37,17 +55,37 @@ export default function AuthScreen({ visible, onClose, isGuestMode = false }) {
     );
 
     const handleSubmit = async () => {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const cleanEmail = email.trim();
+
+        if (!emailRegex.test(cleanEmail)) {
+            Alert.alert("Invalid Email", "Please enter a valid email address (e.g., user@example.com).");
+            return;
+        }
+
         if (isForgot) {
-            Alert.alert("Coming Soon", "Password reset feature will be added soon.");
+            try {
+                await resetPassword(cleanEmail);
+                Alert.alert("Success", "Password reset link sent to your email!");
+                setIsForgot(false);
+            } catch (error) {
+                Alert.alert("Error", error.message || "Failed to send reset link.");
+            }
             return;
         }
 
         try {
-            const cleanEmail = email.trim();
-
             if (isLogin) {
                 // LOGIN
                 await login(cleanEmail, password);
+                
+                // Handle Remember Me
+                if (remember) {
+                    await AsyncStorage.setItem('rememberedEmail', cleanEmail);
+                } else {
+                    await AsyncStorage.removeItem('rememberedEmail');
+                }
+
                 Alert.alert("Success", "Logged in successfully!");
                 onClose?.(); // Close modal after successful login
             } else {
@@ -61,8 +99,11 @@ export default function AuthScreen({ visible, onClose, isGuestMode = false }) {
                     return;
                 }
                 await signup(cleanEmail, password, name);
-                Alert.alert("Success", "Account created successfully! Please login.");
-                // Switch to login mode after signup
+                Alert.alert(
+                    "Verify Your Email", 
+                    "Account created! We've sent a verification link to your email. Please verify it to access all features."
+                );
+                onClose?.(); // Close modal - user is already logged in by Firebase
                 setIsLogin(true);
                 setPassword("");
                 setConfirm("");
