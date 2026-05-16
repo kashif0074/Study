@@ -1,0 +1,14 @@
+
+[2026-05-16T06:41:05.528Z] Error extracting Leadership%20and%20Leadership%20Development.pptx:
+TypeError: officeTextExtractor is not a function
+    at C:\Users\LAPTOP\Desktop\Studyspark\backend\routes\utils.js:54:31
+    at Layer.handle [as handle_request] (C:\Users\LAPTOP\Desktop\Studyspark\backend\node_modules\express\lib\router\layer.js:95:5)
+    at next (C:\Users\LAPTOP\Desktop\Studyspark\backend\node_modules\express\lib\router\route.js:149:13)
+    at done (C:\Users\LAPTOP\Desktop\Studyspark\backend\node_modules\multer\lib\make-middleware.js:69:7)
+    at indicateDone (C:\Users\LAPTOP\Desktop\Studyspark\backend\node_modules\multer\lib\make-middleware.js:73:68)
+    at C:\Users\LAPTOP\Desktop\Studyspark\backend\node_modules\multer\lib\make-middleware.js:232:11
+    at WriteStream.<anonymous> (C:\Users\LAPTOP\Desktop\Studyspark\backend\node_modules\multer\storage\disk.js:42:9)
+    at WriteStream.emit (node:events:530:35)
+    at finish (node:internal/streams/writable:955:10)
+    at node:internal/streams/writable:936:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)

@@ -58,6 +58,7 @@ const studyPlanRoutes = require('./routes/studyPlans');
 const aiHistoryRoutes = require('./routes/aiHistory');
 const communityRoutes = require('./routes/communities');
 const adminRoutes = require('./routes/admin');
+const utilsRoutes = require('./routes/utils');
 
 // Use Routes
 app.use('/api/auth', authRoutes);
@@ -66,6 +67,7 @@ app.use('/api/study-plans', studyPlanRoutes);
 app.use('/api/ai-history', aiHistoryRoutes);
 app.use('/api/communities', communityRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/utils', utilsRoutes);
 
 // Start Server
 app.listen(PORT, '0.0.0.0', () => {

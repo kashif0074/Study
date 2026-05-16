@@ -58,4 +58,47 @@ router.post('/users/:id/toggle-ban', async (req, res) => {
     }
 });
 
+// Get pending community requests
+router.get('/communities/requests', async (req, res) => {
+    try {
+        const pending = await Community.find({ status: 'pending' }).sort({ createdAt: -1 });
+        res.json({ success: true, communities: pending });
+    } catch (error) {
+        console.error("Error fetching community requests:", error);
+        res.status(500).json({ success: false, message: "Server Error" });
+    }
+});
+
+// Approve Community Request
+router.post('/communities/:id/approve', async (req, res) => {
+    try {
+        const community = await Community.findById(req.params.id);
+        if (!community) return res.status(404).json({ success: false, message: "Community not found" });
+
+        community.status = 'approved';
+        await community.save();
+
+        res.json({ success: true, message: "Community approved successfully" });
+    } catch (error) {
+        console.error("Error approving community:", error);
+        res.status(500).json({ success: false, message: "Server Error" });
+    }
+});
+
+// Reject Community Request
+router.post('/communities/:id/reject', async (req, res) => {
+    try {
+        const community = await Community.findById(req.params.id);
+        if (!community) return res.status(404).json({ success: false, message: "Community not found" });
+
+        community.status = 'rejected';
+        await community.save();
+
+        res.json({ success: true, message: "Community rejected successfully" });
+    } catch (error) {
+        console.error("Error rejecting community:", error);
+        res.status(500).json({ success: false, message: "Server Error" });
+    }
+});
+
 module.exports = router;

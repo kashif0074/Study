@@ -39,16 +39,22 @@ router.get('/', async (req, res) => {
             }
         }
         
-        let communities = await Community.find().sort({ membersCount: -1 });
+        // Filter by approved status (or if status doesn't exist for legacy support)
+        let communities = await Community.find({
+            $or: [
+                { status: 'approved' },
+                { status: { $exists: false } }
+            ]
+        }).sort({ membersCount: -1 });
         
         // Seed default communities if none exist
         if (communities.length === 0) {
             const defaults = [
-                { name: "Software Engineering", subject: "Software Engineering", description: "Share Design, Development, and Innovations", color: "#6366f1" },
-                { name: "Physics Lab", subject: "Physics", description: "Experiments, concepts & breakthroughs", color: "#f59e0b" },
-                { name: "Web Development", subject: "Web Development", description: "HTML, CSS & JS", color: "#10b981" },
-                { name: "Mobile Development", subject: "Mobile Development", description: "React Native and Flutter", color: "#3b82f6" },
-                { name: "Computer Science Hub", subject: "CS", description: "Programming, algorithms & discussions", color: "#8b5cf6" }
+                { name: "Software Engineering", subject: "Software Engineering", description: "Share Design, Development, and Innovations", color: "#6366f1", status: "approved" },
+                { name: "Physics Lab", subject: "Physics", description: "Experiments, concepts & breakthroughs", color: "#f59e0b", status: "approved" },
+                { name: "Web Development", subject: "Web Development", description: "HTML, CSS & JS", color: "#10b981", status: "approved" },
+                { name: "Mobile Development", subject: "Mobile Development", description: "React Native and Flutter", color: "#3b82f6", status: "approved" },
+                { name: "Computer Science Hub", subject: "CS", description: "Programming, algorithms & discussions", color: "#8b5cf6", status: "approved" }
             ];
             await Community.insertMany(defaults);
             communities = await Community.find().sort({ membersCount: -1 });
@@ -84,7 +90,8 @@ router.post('/', async (req, res) => {
             subject,
             description,
             color,
-            createdBy: userId
+            createdBy: userId,
+            status: 'pending' // New communities are pending by default
         });
         
         await community.save();

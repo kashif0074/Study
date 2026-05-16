@@ -6,8 +6,6 @@ import {
     StyleSheet,
     TouchableOpacity,
     Alert,
-    SafeAreaView,
-    StatusBar,
     useWindowDimensions,
     Platform,
     Modal,
@@ -15,6 +13,7 @@ import {
     KeyboardAvoidingView,
     ActivityIndicator
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../context/AuthContext";
 import CONFIG from "../constants/config";
@@ -216,6 +215,8 @@ export default function AdminDashboard({ onBack }) {
     const [communities, setCommunities] = useState([]);
     const [loadingCommunities, setLoadingCommunities] = useState(false);
     const [editingCommunity, setEditingCommunity] = useState(null);
+    const [pendingCommunities, setPendingCommunities] = useState([]);
+    const [loadingRequests, setLoadingRequests] = useState(false);
     const [statsData, setStatsData] = useState({
         totalUsers: 0,
         totalPosts: 0,
@@ -277,6 +278,65 @@ export default function AdminDashboard({ onBack }) {
             console.error("Error toggling ban:", error);
             Alert.alert("Error", "Failed to update user status");
         }
+    };
+
+    const fetchPendingRequests = async () => {
+        setLoadingRequests(true);
+        try {
+            const resp = await fetch(`${CONFIG.API_URLS.ADMIN}/communities/requests`);
+            const data = await resp.json();
+            if (data.success) {
+                setPendingCommunities(data.communities);
+            }
+        } catch (error) {
+            console.error("Error fetching pending requests:", error);
+        } finally {
+            setLoadingRequests(false);
+        }
+    };
+
+    const handleApproveRequest = async (id) => {
+        try {
+            const resp = await fetch(`${CONFIG.API_URLS.ADMIN}/communities/${id}/approve`, {
+                method: 'POST'
+            });
+            const data = await resp.json();
+            if (data.success) {
+                setPendingCommunities(prev => prev.filter(c => c._id !== id));
+                Alert.alert("Approved", "Community has been published.");
+                fetchStats();
+            }
+        } catch (error) {
+            Alert.alert("Error", "Failed to approve request");
+        }
+    };
+
+    const handleRejectRequest = async (id) => {
+        Alert.alert(
+            "Reject Request",
+            "Are you sure you want to reject this community request?",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Reject",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            const resp = await fetch(`${CONFIG.API_URLS.ADMIN}/communities/${id}/reject`, {
+                                method: 'POST'
+                            });
+                            const data = await resp.json();
+                            if (data.success) {
+                                setPendingCommunities(prev => prev.filter(c => c._id !== id));
+                                Alert.alert("Rejected", "Request has been rejected.");
+                            }
+                        } catch (error) {
+                            Alert.alert("Error", "Failed to reject request");
+                        }
+                    }
+                }
+            ]
+        );
     };
 
     const fetchCommunities = async () => {
@@ -404,8 +464,6 @@ export default function AdminDashboard({ onBack }) {
 
     return (
         <SafeAreaView style={styles.safeArea}>
-            <StatusBar backgroundColor="transparent" translucent={true} barStyle="light-content" />
-
             {activeSection === "menu" && renderHeader()}
 
             {activeSection === "menu" ? (
@@ -454,6 +512,23 @@ export default function AdminDashboard({ onBack }) {
                             <View style={styles.menuInfo}>
                                 <Text style={[styles.menuTitle, { fontSize: fontSize.xl }]}>Admin Manage Users</Text>
                                 <Text style={[styles.menuDesc, { fontSize: fontSize.sm }]}>View and manage all registered students</Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={24} color={colors.subText} />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity 
+                            style={styles.menuCard} 
+                            onPress={() => {
+                                setActiveSection("requests");
+                                fetchPendingRequests();
+                            }}
+                        >
+                            <View style={[styles.iconBox, { backgroundColor: colors.warning + "15" }]}>
+                                <Ionicons name="notifications" size={32} color={colors.warning} />
+                            </View>
+                            <View style={styles.menuInfo}>
+                                <Text style={[styles.menuTitle, { fontSize: fontSize.xl }]}>Community Creation Requests</Text>
+                                <Text style={[styles.menuDesc, { fontSize: fontSize.sm }]}>Review and approve new student communities</Text>
                             </View>
                             <Ionicons name="chevron-forward" size={24} color={colors.subText} />
                         </TouchableOpacity>
@@ -541,6 +616,56 @@ export default function AdminDashboard({ onBack }) {
                         </View>
 
                         <View style={{ height: 100 }} />
+                    </ScrollView>
+                </View>
+            ) : activeSection === "requests" ? (
+                <View style={{ flex: 1 }}>
+                    {renderHeader()}
+                    <ScrollView 
+                        style={styles.container}
+                        contentContainerStyle={[styles.scroll, { maxWidth: responsiveWidth, alignSelf: 'center', width: '100%' }]}
+                        showsVerticalScrollIndicator={false}
+                    >
+                        <Text style={[styles.sectionTitle, { fontSize: fontSize.xl }]}>Pending Requests</Text>
+                        
+                        {loadingRequests ? (
+                            <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 20 }} />
+                        ) : (
+                            <View style={styles.section}>
+                                {pendingCommunities.map(req => (
+                                    <View key={req._id} style={styles.reportCard}>
+                                        <View style={styles.reportHeader}>
+                                            <Text style={[styles.reportType, { color: req.color }]}>{req.subject}</Text>
+                                            <Text style={styles.reportStatus}>Pending</Text>
+                                        </View>
+                                        <Text style={[styles.reportReason, { fontWeight: 'bold' }]}>{req.name}</Text>
+                                        <Text style={styles.reportReason}>{req.description}</Text>
+                                        <Text style={styles.reportedBy}>Created by UID: {req.createdBy}</Text>
+                                        
+                                        <View style={styles.reportActions}>
+                                            <TouchableOpacity 
+                                                style={styles.reviewBtn}
+                                                onPress={() => handleApproveRequest(req._id)}
+                                            >
+                                                <Text style={styles.reviewBtnText}>Approve</Text>
+                                            </TouchableOpacity>
+                                            <TouchableOpacity 
+                                                style={styles.deleteBtn}
+                                                onPress={() => handleRejectRequest(req._id)}
+                                            >
+                                                <Text style={styles.deleteBtnText}>Reject</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    </View>
+                                ))}
+                                {pendingCommunities.length === 0 && (
+                                    <View style={styles.centered}>
+                                        <Ionicons name="checkmark-circle-outline" size={64} color={colors.subText} />
+                                        <Text style={[styles.userEmail, { marginTop: 10 }]}>No pending requests.</Text>
+                                    </View>
+                                )}
+                            </View>
+                        )}
                     </ScrollView>
                 </View>
             ) : null}

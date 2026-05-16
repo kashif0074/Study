@@ -13,5 +13,7 @@ const verticalScale = (size) => (height / GUIDELINE_BASE_HEIGHT) * size;
 const moderateScale = (size, factor = 0.5) => size + (scale(size) - size) * factor;
 
 const isTablet = width >= 768; // Simple breakpoint for tablet
+const isSmallScreen = width < 375;
+const responsiveWidth = Math.min(width, 500);
 
-export { scale, verticalScale, moderateScale, isTablet, width, height };
+export { scale, verticalScale, moderateScale, isTablet, isSmallScreen, responsiveWidth, width, height };

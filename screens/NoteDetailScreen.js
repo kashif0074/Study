@@ -1,7 +1,6 @@
 // screens/NoteDetailScreen.js - FULLY RESPONSIVE & FUNCTIONAL
 import React, { useState, useEffect } from "react";
 import {
-    SafeAreaView,
     ScrollView,
     StyleSheet,
     Text,
@@ -10,9 +9,9 @@ import {
     Image,
     Alert,
     Dimensions,
-    StatusBar,
     Share,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { Audio } from "expo-av";
@@ -285,11 +284,6 @@ export default function NoteDetailScreen() {
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-            <StatusBar
-                backgroundColor="transparent"
-                translucent={true}
-                barStyle={colors.text === colors.white ? "light-content" : "dark-content"}
-            />
             <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
                 <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
                     <Ionicons name="arrow-back" size={scale(24)} color={colors.text} />

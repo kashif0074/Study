@@ -1,5 +1,6 @@
 // screens/ProfileScreen.js (UPDATED WITH GLOBAL THEME)
 import React, { useState } from "react";
+import { StatusBar } from 'expo-status-bar';
 import {
     View,
     Text,
@@ -12,10 +13,9 @@ import {
     TextInput,
     Image,
     useWindowDimensions,
-    SafeAreaView,
-    StatusBar,
     Platform,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
@@ -32,7 +32,8 @@ export default function ProfileScreen() {
         toggleDarkMode,
         colors,
         updateUser,
-        isAdmin
+        isAdmin,
+        resetPassword
     } = useAuth();
     const styles = getStyles(colors);
     const { width, height } = useWindowDimensions();
@@ -45,7 +46,7 @@ export default function ProfileScreen() {
     const verticalScale = (size) => height / 812 * size;
 
 
-    const [notifications, setNotifications] = useState(true);
+
     const [accountModal, setAccountModal] = useState(false);
 
     const [profile, setProfile] = useState({
@@ -79,6 +80,8 @@ export default function ProfileScreen() {
     const [tempMajor, setTempMajor] = useState(profile.major);
     const [tempBio, setTempBio] = useState(profile.bio);
     const [tempInstitution, setTempInstitution] = useState(profile.institution);
+    const [tempEmail, setTempEmail] = useState(profile.email);
+    const [tempYear, setTempYear] = useState(profile.year);
 
     // Use colors from AuthContext directly
     // const theme removed in favor of colors object
@@ -176,6 +179,7 @@ export default function ProfileScreen() {
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+            <StatusBar style="dark" />
             <ScrollView style={styles.container}>
 
                 {/* Header */}
@@ -184,7 +188,7 @@ export default function ProfileScreen() {
                     style={[
                         styles.header,
                         {
-                            paddingTop: verticalScale(isTablet ? 70 : isSmallScreen ? 40 : 50),
+                            paddingTop: verticalScale(isTablet ? 30 : isSmallScreen ? 20 : 25),
                             paddingHorizontal: scale(isTablet ? 32 : isSmallScreen ? 16 : 24),
                             paddingBottom: verticalScale(isTablet ? 40 : 32),
                             borderBottomLeftRadius: scale(32),
@@ -376,31 +380,7 @@ export default function ProfileScreen() {
                             }
                         ]}>Settings</Text>
 
-                        <View style={[
-                            styles.settingRow,
-                            {
-                                backgroundColor: colors.card,
-                                padding: scale(isTablet ? 20 : isSmallScreen ? 14 : 16),
-                                borderRadius: scale(16),
-                                marginBottom: verticalScale(isTablet ? 16 : isSmallScreen ? 10 : 12),
-                            }
-                        ]}>
-                            <View style={[styles.settingLeft, { gap: scale(14) }]}>
-                                <Ionicons name="notifications-outline" size={scale(isTablet ? 26 : isSmallScreen ? 20 : 22)} color={colors.subText} />
-                                <Text style={[
-                                    styles.settingLabel,
-                                    {
-                                        color: colors.text,
-                                        fontSize: scale(isTablet ? 16 : isSmallScreen ? 14 : 15),
-                                    }
-                                ]}>Push Notifications</Text>
-                            </View>
-                            <Switch
-                                value={notifications}
-                                onValueChange={setNotifications}
-                                thumbColor={notifications ? colors.primary : colors.subText}
-                            />
-                        </View>
+
 
                         <View style={[
                             styles.settingRow,
@@ -469,19 +449,26 @@ export default function ProfileScreen() {
                                     borderRadius: scale(16),
                                 }
                             ]}
-                            onPress={() => setAccountModal(true)}
+                            onPress={() => {
+                                setTempName(profile.name);
+                                setTempEmail(profile.email);
+                                setTempInstitution(profile.institution);
+                                setTempMajor(profile.major);
+                                setTempYear(profile.year);
+                                setAccountModal(true);
+                            }}
                         >
                             <View style={[styles.settingLeft, { gap: scale(14) }]}>
-                                <Ionicons name="person-outline" size={scale(isTablet ? 26 : isSmallScreen ? 20 : 22)} color={colors.subText} />
+                                <Ionicons name="person-outline" size={scale(20)} color={colors.subText} />
                                 <Text style={[
                                     styles.settingLabel,
                                     {
                                         color: colors.text,
-                                        fontSize: scale(isTablet ? 16 : isSmallScreen ? 14 : 15),
+                                        fontSize: scale(16),
                                     }
                                 ]}>Account Settings</Text>
                             </View>
-                            <Ionicons name="chevron-forward" size={scale(isTablet ? 24 : isSmallScreen ? 18 : 20)} color={colors.subText} />
+                            <Ionicons name="chevron-forward" size={scale(20)} color={colors.subText} />
                         </TouchableOpacity>
                     </View>
 
@@ -510,12 +497,7 @@ export default function ProfileScreen() {
                 </View>
             </ScrollView >
 
-            {/* Add StatusBar */}
-            <StatusBar
-                backgroundColor="transparent"
-                translucent={true}
-                barStyle="light-content"
-            />
+            {/* Removed StatusBar */}
 
             {/* Edit Profile Modal */}
             < Modal visible={editModal} animationType="slide" transparent >
@@ -681,109 +663,119 @@ export default function ProfileScreen() {
                                 marginBottom: verticalScale(24),
                             }
                         ]}>Account Information</Text>
-
                         <View style={styles.accountInfoSection}>
-                            <View style={styles.accountInfoRow}>
-                                <Ionicons name="person-outline" size={scale(20)} color={colors.primary} />
-                                <View style={styles.accountInfoText}>
-                                    <Text style={[
-                                        styles.accountInfoLabel,
-                                        { color: colors.subText, fontSize: scale(14) }
-                                    ]}>Name</Text>
-                                    <Text style={[
-                                        styles.accountInfoValue,
-                                        { color: colors.text, fontSize: scale(16) }
-                                    ]}>{profile.name}</Text>
-                                </View>
+                            <View style={styles.formGroup}>
+                                <Text style={[styles.accountInfoLabel, { color: colors.subText, fontSize: scale(14) }]}>Name</Text>
+                                <TextInput
+                                    style={[styles.input, { backgroundColor: colors.inputBackground, color: colors.text, borderColor: colors.border, borderRadius: scale(12), padding: scale(12), fontSize: scale(16), marginTop: 8 }]}
+                                    value={tempName}
+                                    onChangeText={setTempName}
+                                    placeholder="Name"
+                                    placeholderTextColor={colors.subText}
+                                />
                             </View>
 
-                            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                            <View style={[styles.formGroup, { marginTop: 20 }]}>
+                                <Text style={[styles.accountInfoLabel, { color: colors.subText, fontSize: scale(14) }]}>Email Address</Text>
+                                <View style={[styles.input, { backgroundColor: colors.inputBackground, borderColor: colors.border, borderRadius: scale(12), padding: scale(12), marginTop: 8, opacity: 0.7 }]}>
+                                    <Text style={{ color: colors.subText, fontSize: scale(16) }}>{profile.email}</Text>
+                                </View>
+                                <Text style={{ color: colors.subText, fontSize: scale(12), marginTop: 6, fontStyle: 'italic' }}>
+                                    Email cannot be changed for security reasons.
+                                </Text>
+                            </View>
 
-                            <View style={styles.accountInfoRow}>
+                            <TouchableOpacity
+                                style={[
+                                    styles.changePasswordBtn,
+                                    {
+                                        marginTop: 32,
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        padding: scale(16),
+                                        backgroundColor: colors.primary + "10",
+                                        borderRadius: scale(12),
+                                        borderWidth: 1,
+                                        borderColor: colors.primary + "30",
+                                        gap: 12
+                                    }
+                                ]}
+                                onPress={async () => {
+                                    Alert.alert(
+                                        "Change Password",
+                                        "We will send a password reset link to your email address. Do you want to proceed?",
+                                        [
+                                            { text: "Cancel", style: "cancel" },
+                                            { 
+                                                text: "Send Link", 
+                                                onPress: async () => {
+                                                    try {
+                                                        await resetPassword(profile.email);
+                                                        Alert.alert("Link Sent", "Please check your email to reset your password.");
+                                                    } catch (error) {
+                                                        Alert.alert("Error", error.message || "Failed to send reset link.");
+                                                    }
+                                                }
+                                            }
+                                        ]
+                                    );
+                                }}
+                            >
+                                <Ionicons name="lock-closed-outline" size={scale(20)} color={colors.primary} />
+                                <View style={{ flex: 1 }}>
+                                    <Text style={{ color: colors.text, fontSize: scale(16), fontWeight: '600' }}>Change Password</Text>
+                                    <Text style={{ color: colors.subText, fontSize: scale(13), marginTop: 2 }}>Send reset link to your email</Text>
+                                </View>
                                 <Ionicons name="mail-outline" size={scale(20)} color={colors.primary} />
-                                <View style={styles.accountInfoText}>
-                                    <Text style={[
-                                        styles.accountInfoLabel,
-                                        { color: colors.subText, fontSize: scale(14) }
-                                    ]}>Email</Text>
-                                    <Text style={[
-                                        styles.accountInfoValue,
-                                        { color: colors.text, fontSize: scale(16) }
-                                    ]}>{profile.email}</Text>
-                                </View>
-                            </View>
-
-                            <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-                            <View style={styles.accountInfoRow}>
-                                <Ionicons name="school-outline" size={scale(20)} color={colors.primary} />
-                                <View style={styles.accountInfoText}>
-                                    <Text style={[
-                                        styles.accountInfoLabel,
-                                        { color: colors.subText, fontSize: scale(14) }
-                                    ]}>Institute</Text>
-                                    <Text style={[
-                                        styles.accountInfoValue,
-                                        { color: colors.text, fontSize: scale(16) }
-                                    ]}>{profile.institution}</Text>
-                                </View>
-                            </View>
-
-                            <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-                            <View style={styles.accountInfoRow}>
-                                <Ionicons name="book-outline" size={scale(20)} color={colors.primary} />
-                                <View style={styles.accountInfoText}>
-                                    <Text style={[
-                                        styles.accountInfoLabel,
-                                        { color: colors.subText, fontSize: scale(14) }
-                                    ]}>Major & Year</Text>
-                                    <Text style={[
-                                        styles.accountInfoValue,
-                                        { color: colors.text, fontSize: scale(16) }
-                                    ]}>{profile.major} • {profile.year}</Text>
-                                </View>
-                            </View>
-
-                            <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-                            <View style={styles.accountInfoRow}>
-                                <Ionicons name="document-text-outline" size={scale(20)} color={colors.primary} />
-                                <View style={styles.accountInfoText}>
-                                    <Text style={[
-                                        styles.accountInfoLabel,
-                                        { color: colors.subText, fontSize: scale(14) }
-                                    ]}>Bio</Text>
-                                    <Text style={[
-                                        styles.accountInfoValue,
-                                        { color: colors.text, fontSize: scale(16), lineHeight: scale(22) }
-                                    ]}>{profile.bio}</Text>
-                                </View>
-                            </View>
+                            </TouchableOpacity>
                         </View>
 
                         <View style={[
                             styles.modalButtons,
-                            { marginTop: verticalScale(isTablet ? 28 : isSmallScreen ? 20 : 20) }
+                            { marginTop: verticalScale(isTablet ? 28 : isSmallScreen ? 20 : 20), flexDirection: 'row', gap: 12 }
                         ]}>
                             <TouchableOpacity
                                 style={[
                                     styles.closeBtn,
                                     {
-                                        padding: verticalScale(isTablet ? 20 : isSmallScreen ? 14 : 16),
-                                        borderRadius: scale(16),
+                                        padding: verticalScale(14),
+                                        borderRadius: scale(12),
                                         backgroundColor: colors.border,
+                                        flex: 1,
+                                        alignItems: 'center'
                                     }
                                 ]}
                                 onPress={() => setAccountModal(false)}
                             >
-                                <Text style={[
-                                    styles.closeText,
+                                <Text style={[styles.closeText, { fontSize: scale(16), color: colors.text, fontWeight: '600' }]}>Cancel</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={[
+                                    styles.saveBtn,
                                     {
-                                        fontSize: scale(isTablet ? 18 : isSmallScreen ? 14 : 16),
-                                        color: colors.text
+                                        padding: verticalScale(14),
+                                        borderRadius: scale(12),
+                                        backgroundColor: colors.primary,
+                                        flex: 1,
+                                        alignItems: 'center'
                                     }
-                                ]}>Close</Text>
+                                ]}
+                                onPress={() => {
+                                    const updatedData = {
+                                        name: tempName,
+                                        email: tempEmail,
+                                        institution: tempInstitution,
+                                        major: tempMajor,
+                                        year: tempYear
+                                    };
+                                    setProfile({ ...profile, ...updatedData });
+                                    updateUser(updatedData);
+                                    setAccountModal(false);
+                                    Alert.alert("Success", "Account information updated!");
+                                }}
+                            >
+                                <Text style={[styles.saveText, { fontSize: scale(16), color: colors.white, fontWeight: '600' }]}>Save</Text>
                             </TouchableOpacity>
                         </View>
                     </View>

@@ -1,5 +1,6 @@
 // screens/StudyPlanner.js (UPDATED FOR PDF/DOC/PPT FILES)
 import React, { useState, useEffect, useMemo } from "react";
+import { StatusBar } from 'expo-status-bar';
 import {
   View,
   Text,
@@ -12,7 +13,6 @@ import {
   Platform,
   useWindowDimensions,
   KeyboardAvoidingView,
-  StatusBar,
 } from "react-native";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from "@expo/vector-icons";
@@ -23,6 +23,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { useAuth } from "../context/AuthContext";
 import { askGemini } from "../constants/gemini";
 import CONFIG from "../constants/config";
+import { extractTextFromFile } from "../utils/ai";
 
 export default function StudyPlanner({ navigation }) {
   const { user, updateUser, colors, recordActivity, addStudyTime } = useAuth();
@@ -346,10 +347,14 @@ export default function StudyPlanner({ navigation }) {
       JSON Output:`;
 
       // Convert files
+      let extractedTextFromFiles = "";
       const filesToSend = [];
       for (const file of newExam.files) {
         if (file.type === "doc" || file.type === "ppt") {
-            showToast("⚠️ Note", `${file.name} is a format not supported directly by AI. Skipping it for AI context.`);
+            const text = await extractTextFromFile(file);
+            if (text) {
+                extractedTextFromFiles += `\n\n--- Content from ${file.name} ---\n${text}`;
+            }
             continue;
         }
         try {
@@ -363,7 +368,8 @@ export default function StudyPlanner({ navigation }) {
         }
       }
 
-      const aiSessions = await askGemini(prompt, filesToSend, true);
+      const promptWithContext = `${prompt}\n\nAdditional File Context:\n${extractedTextFromFiles}`;
+      const aiSessions = await askGemini(promptWithContext, filesToSend, true);
 
       if (!Array.isArray(aiSessions)) {
         throw new Error("Invalid schedule format from AI");
@@ -453,22 +459,8 @@ export default function StudyPlanner({ navigation }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      {/* This view ensures the top status bar area is purple to match the header */}
-      <View style={{ 
-        position: 'absolute', 
-        top: 0, 
-        left: 0, 
-        right: 0, 
-        height: verticalScale(100), 
-        backgroundColor: colors.primary 
-      }} />
-      
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
-        <StatusBar
-          backgroundColor="transparent"
-          translucent={true}
-          barStyle="light-content"
-        />
+        <StatusBar style="dark" />
         <ScrollView
           style={styles.container}
           contentContainerStyle={[styles.scroll, { maxWidth: responsiveWidth, alignSelf: 'center', width: '100%', flexGrow: 1 }]}
@@ -758,8 +750,7 @@ export default function StudyPlanner({ navigation }) {
 const getStyles = (colors, scale, verticalScale, moderateScale, isTablet) => StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: 'transparent',
-    paddingTop: Platform.OS === 'android' ? 25 : 0,
+    backgroundColor: colors.background,
   },
   container: {
     flex: 1,
@@ -773,7 +764,7 @@ const getStyles = (colors, scale, verticalScale, moderateScale, isTablet) => Sty
   header: {
     backgroundColor: colors.primary,
     paddingHorizontal: scale(20),
-    paddingTop: verticalScale(isTablet ? 40 : 50),
+    paddingTop: verticalScale(isTablet ? 20 : 25),
     paddingBottom: verticalScale(isTablet ? 30 : 24),
     borderBottomLeftRadius: scale(32),
     borderBottomRightRadius: scale(32),

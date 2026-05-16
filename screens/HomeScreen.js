@@ -1,7 +1,6 @@
 // screens/HomeScreen.js (Responsive Version with Theme)
 import React, { memo, useRef, useEffect, useState } from "react";
 import {
-    SafeAreaView,
     ScrollView,
     StyleSheet,
     Text,
@@ -13,8 +12,8 @@ import {
     Alert,
     useWindowDimensions,
     Image,
-    StatusBar,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
@@ -262,9 +261,6 @@ export default function HomeScreen() {
                             </Text>
                         </View>
                         <View style={styles.headerRight}>
-                            <TouchableOpacity style={styles.headerIcon}>
-                                <Ionicons name="notifications-outline" size={isSmallScreen ? 20 : isTablet ? 28 : 24} color={colors.white} />
-                            </TouchableOpacity>
                             <TouchableOpacity
                                 style={[styles.profileBadge, {
                                     backgroundColor: user?.avatar ? 'transparent' : colors.secondary,

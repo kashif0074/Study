@@ -1,5 +1,6 @@
 // screens/Communities.js
 import React, { useState } from "react";
+import { StatusBar } from 'expo-status-bar';
 import {
     View,
     Text,
@@ -12,14 +13,15 @@ import {
     Image,
     Platform,
     useWindowDimensions,
-    SafeAreaView,
     KeyboardAvoidingView,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useAuth } from "../context/AuthContext";
 import CONFIG from "../constants/config";
 import { useEffect } from "react";
+import { isTablet, isSmallScreen, responsiveWidth } from "../utils/responsive";
 
 // Global constants removed to support dynamic resizing
 
@@ -32,6 +34,7 @@ const PostCard = ({ post, onLike, onComment, isAdmin, onAdminAction }) => {
     const styles = getStyles(colors, isTablet);
     const [showCommentInput, setShowCommentInput] = useState(false);
     const [commentText, setCommentText] = useState("");
+    const [showAllComments, setShowAllComments] = useState(false);
 
     const handleAddComment = () => {
         if (!commentText.trim()) {
@@ -131,13 +134,24 @@ const PostCard = ({ post, onLike, onComment, isAdmin, onAdminAction }) => {
             {/* Comments */}
             {post.comments.length > 0 && (
                 <View style={styles.commentsSection}>
-                    {post.comments.map((c) => (
+                    {(showAllComments ? post.comments : post.comments.slice(0, 2)).map((c) => (
                         <View key={c.id} style={styles.comment}>
                             <Text style={styles.commentAuthor}>{c.author}</Text>
                             <Text style={styles.commentText}>{c.text}</Text>
                             <Text style={styles.commentTime}>{c.timestamp}</Text>
                         </View>
                     ))}
+
+                    {post.comments.length > 2 && (
+                        <TouchableOpacity 
+                            style={styles.viewMoreBtn} 
+                            onPress={() => setShowAllComments(!showAllComments)}
+                        >
+                            <Text style={styles.viewMoreText}>
+                                {showAllComments ? "Show less" : `View all ${post.comments.length} comments`}
+                            </Text>
+                        </TouchableOpacity>
+                    )}
                 </View>
             )}
 
@@ -396,7 +410,7 @@ export default function Communities({ onBack }) {
             if (resp.ok) {
                 fetchCommunities();
                 setShowCreateCommunity(false);
-                Alert.alert("Success!", `${newCommunity.name} community created!`);
+                Alert.alert("Request Sent!", `${newCommunity.name} community has been sent to admin for approval. It will be live once approved.`);
             }
         } catch (error) {
             Alert.alert("Error", "Failed to create community");
@@ -489,22 +503,25 @@ export default function Communities({ onBack }) {
 
     return (
         <SafeAreaView style={styles.safeArea}>
+            <StatusBar style="dark" />
             <ScrollView
                 style={styles.container}
-                contentContainerStyle={styles.scroll}
+                contentContainerStyle={[styles.scroll, { maxWidth: responsiveWidth, alignSelf: 'center', width: '100%' }]}
                 showsVerticalScrollIndicator={false}
             >
                 {/* Header */}
                 <View style={styles.header}>
-                    {onBack && (
-                        <TouchableOpacity onPress={onBack} style={{ marginRight: 15 }}>
-                            <Ionicons name="arrow-back" size={isTablet ? 36 : 28} color={colors.white} />
-                        </TouchableOpacity>
-                    )}
-                    <Ionicons name="people" size={isTablet ? 44 : 36} color={colors.white} />
-                    <View style={styles.headerText}>
-                        <Text style={styles.headerTitle}>Communities</Text>
-                        <Text style={styles.headerSubtitle}>Connect & learn together</Text>
+                    <View style={{ maxWidth: responsiveWidth, alignSelf: 'center', width: '100%', flexDirection: 'row', alignItems: 'center' }}>
+                        {onBack && (
+                            <TouchableOpacity onPress={onBack} style={{ marginRight: 15 }}>
+                                <Ionicons name="arrow-back" size={isTablet ? 36 : 28} color={colors.white} />
+                            </TouchableOpacity>
+                        )}
+                        <Ionicons name="people" size={isTablet ? 44 : 36} color={colors.white} />
+                        <View style={styles.headerText}>
+                            <Text style={styles.headerTitle}>Communities</Text>
+                            <Text style={styles.headerSubtitle}>Connect & learn together</Text>
+                        </View>
                     </View>
                 </View>
 
@@ -517,7 +534,7 @@ export default function Communities({ onBack }) {
                         </Text>
                     </View>
                 ) : (
-                    <View style={styles.content}>
+                    <View style={[styles.content, { maxWidth: responsiveWidth, alignSelf: 'center', width: '100%' }]}>
                     {/* Search */}
                     <View style={styles.searchBar}>
                         <Ionicons name="search" size={isTablet ? 24 : 20} color={colors.placeholder} />
@@ -774,35 +791,38 @@ function CommunityDetail({ community, posts, onBack, onCreatePost, onLike, onCom
         <SafeAreaView style={styles.safeArea}>
             <View style={styles.detailContainer}>
                 <View style={[styles.detailHeader, { backgroundColor: community?.color || colors.primary }]}>
-                    <View style={styles.detailHeaderTop}>
-                        <TouchableOpacity style={styles.backButton} onPress={onBack}>
-                            <Ionicons name="arrow-back" size={isTablet ? 32 : 28} color={colors.white} />
-                        </TouchableOpacity>
-                        {community?.createdBy === "user" && (
-                            <View style={styles.userCreatedLabel}>
-                                <Ionicons name="star" size={isTablet ? 18 : 14} color={colors.warning} />
-                                <Text style={styles.userCreatedLabelText}>Your Community</Text>
-                            </View>
-                        )}
-                    </View>
-
-                    <Text style={styles.detailCommunityName}>{community?.name}</Text>
-                    <Text style={styles.detailCommunityDesc}>{community?.description}</Text>
-
-                    <View style={styles.detailCommunityStats}>
-                        <View style={styles.statItem}>
-                            <Ionicons name="people" size={isTablet ? 22 : 16} color={colors.white} />
-                            <Text style={styles.detailStat}>{(community?.membersCount || community?.members || 0).toLocaleString()} Members</Text>
+                    <View style={{ maxWidth: responsiveWidth, alignSelf: 'center', width: '100%' }}>
+                        <View style={styles.detailHeaderTop}>
+                            <TouchableOpacity style={styles.backButton} onPress={onBack}>
+                                <Ionicons name="arrow-back" size={isTablet ? 32 : 28} color={colors.white} />
+                            </TouchableOpacity>
+                            {community?.createdBy === "user" && (
+                                <View style={styles.userCreatedLabel}>
+                                    <Ionicons name="star" size={isTablet ? 18 : 14} color={colors.warning} />
+                                    <Text style={styles.userCreatedLabelText}>Your Community</Text>
+                                </View>
+                            )}
                         </View>
-                        <View style={styles.statItem}>
-                            <Ionicons name="document-text" size={isTablet ? 22 : 16} color={colors.white} />
-                            <Text style={styles.detailStat}>{posts.length} Posts</Text>
+
+                        <Text style={styles.detailCommunityName}>{community?.name}</Text>
+                        <Text style={styles.detailCommunityDesc}>{community?.description}</Text>
+
+                        <View style={styles.detailCommunityStats}>
+                            <View style={styles.statItem}>
+                                <Ionicons name="people" size={isTablet ? 22 : 16} color={colors.white} />
+                                <Text style={styles.detailStat}>{(community?.membersCount || community?.members || 0).toLocaleString()} Members</Text>
+                            </View>
+                            <View style={styles.statItem}>
+                                <Ionicons name="document-text" size={isTablet ? 22 : 16} color={colors.white} />
+                                <Text style={styles.detailStat}>{posts.length} Posts</Text>
+                            </View>
                         </View>
                     </View>
                 </View>
 
                 <ScrollView
                     style={styles.detailContent}
+                    contentContainerStyle={{ maxWidth: responsiveWidth, alignSelf: 'center', width: '100%' }}
                     showsVerticalScrollIndicator={false}
                 >
                     <TouchableOpacity
@@ -924,6 +944,7 @@ function CreatePostModal({ onClose, onPost }) {
 
                 <ScrollView
                     style={styles.createModalBody}
+                    contentContainerStyle={{ maxWidth: responsiveWidth, alignSelf: 'center', width: '100%' }}
                     showsVerticalScrollIndicator={false}
                 >
                     {/* Type Selector */}
@@ -1046,6 +1067,7 @@ function CreateCommunityModal({ onClose, onCreate }) {
 
                 <ScrollView
                     style={styles.createCommunityModalBody}
+                    contentContainerStyle={{ maxWidth: responsiveWidth, alignSelf: 'center', width: '100%' }}
                     showsVerticalScrollIndicator={false}
                 >
                     <View style={styles.formGroup}>
@@ -1170,6 +1192,7 @@ function EditCommunityModal({ community, onClose, onUpdate, onDelete }) {
 
                 <ScrollView
                     style={styles.createCommunityModalBody}
+                    contentContainerStyle={{ maxWidth: responsiveWidth, alignSelf: 'center', width: '100%' }}
                     showsVerticalScrollIndicator={false}
                 >
                     <View style={styles.formGroup}>
@@ -1254,8 +1277,7 @@ function EditCommunityModal({ community, onClose, onUpdate, onDelete }) {
 const getStyles = (colors, isTablet) => StyleSheet.create({
     safeArea: {
         flex: 1,
-        backgroundColor: colors.primary,
-        paddingTop: Platform.OS === 'android' ? 25 : 0,
+        backgroundColor: colors.background,
     },
     container: {
         flex: 1,
@@ -1267,7 +1289,7 @@ const getStyles = (colors, isTablet) => StyleSheet.create({
     header: {
         backgroundColor: colors.primary,
         padding: isTablet ? 32 : 20,
-        paddingTop: isTablet ? 40 : 60,
+        paddingTop: isTablet ? 20 : 25,
         paddingBottom: isTablet ? 36 : 30,
         flexDirection: "row",
         alignItems: "center",
@@ -1659,6 +1681,15 @@ const getStyles = (colors, isTablet) => StyleSheet.create({
         borderTopWidth: 1,
         borderColor: colors.divider
     },
+    viewMoreBtn: {
+        marginTop: 8,
+        paddingVertical: 4,
+    },
+    viewMoreText: {
+        color: colors.primary,
+        fontSize: isTablet ? 15 : 13,
+        fontWeight: "600",
+    },
     comment: {
         marginBottom: isTablet ? 16 : 12
     },
@@ -1698,7 +1729,7 @@ const getStyles = (colors, isTablet) => StyleSheet.create({
         backgroundColor: colors.background
     },
     detailHeader: {
-        paddingTop: isTablet ? 40 : 60,
+        paddingTop: isTablet ? 20 : 25,
         paddingBottom: isTablet ? 36 : 30,
         paddingHorizontal: isTablet ? 32 : 20,
     },

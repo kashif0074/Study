@@ -1,4 +1,5 @@
 import React, { useMemo, useEffect } from "react";
+import { StatusBar } from 'expo-status-bar';
 import {
   View,
   Text,
@@ -7,7 +8,6 @@ import {
   TouchableOpacity,
   Platform,
   useWindowDimensions,
-  StatusBar,
 } from "react-native";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from "@expo/vector-icons";
@@ -117,18 +117,20 @@ export default function StudyPlanDetailScreen({ route, navigation }) {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar backgroundColor="transparent" translucent={true} barStyle="light-content" />
+      <StatusBar style="dark" />
       
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={moderateScale(24)} color={colors.white} />
-        </TouchableOpacity>
-        <View style={styles.headerText}>
-          <Text style={[styles.headerTitle, { fontSize: fontSize['2xl'] }]}>{exam.subject}</Text>
-          <Text style={[styles.headerSubtitle, { fontSize: fontSize.base }]}>
-            {format(new Date(exam.date), "d MMMM yyyy")}
-          </Text>
+        <View style={{ maxWidth: responsiveWidth, alignSelf: 'center', width: '100%', flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={moderateScale(24)} color={colors.white} />
+          </TouchableOpacity>
+          <View style={styles.headerText}>
+            <Text style={[styles.headerTitle, { fontSize: fontSize['2xl'] }]}>{exam.subject}</Text>
+            <Text style={[styles.headerSubtitle, { fontSize: fontSize.base }]}>
+              {format(new Date(exam.date), "d MMMM yyyy")}
+            </Text>
+          </View>
         </View>
       </View>
 
@@ -194,7 +196,7 @@ export default function StudyPlanDetailScreen({ route, navigation }) {
 const getStyles = (colors, scale, verticalScale, moderateScale, isTablet) => StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.background,
   },
   container: {
     flex: 1,
@@ -207,7 +209,7 @@ const getStyles = (colors, scale, verticalScale, moderateScale, isTablet) => Sty
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: scale(20),
-    paddingTop: verticalScale(Platform.OS === 'android' ? 40 : 20),
+    paddingTop: verticalScale(20),
     paddingBottom: verticalScale(20),
   },
   backBtn: {

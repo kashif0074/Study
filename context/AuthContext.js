@@ -10,6 +10,7 @@ import {
   createUserWithEmailAndPassword, 
   signOut,
   sendPasswordResetEmail,
+  sendEmailVerification,
   updateProfile
 } from 'firebase/auth';
 
@@ -47,6 +48,14 @@ export const AuthProvider = ({ children }) => {
                 const emailFallback = cleanEmail.split('@')[0];
                 const backendName = mongoProfile.name;
                 const firebaseName = currentUser.displayName;
+
+                // CHECK EMAIL VERIFICATION
+                if (!currentUser.emailVerified && cleanEmail !== ADMIN_EMAIL.toLowerCase()) {
+                    console.log("🚫 Email not verified, logging out...");
+                    setUser(null);
+                    setLoading(false);
+                    return;
+                }
                 
                 setUser(prev => {
                     const existingName = prev?.name;
@@ -100,6 +109,13 @@ export const AuthProvider = ({ children }) => {
 
             const userCredential = await signInWithEmailAndPassword(auth, email, password);
             const loggedInUser = userCredential.user;
+
+            // CHECK EMAIL VERIFICATION
+            if (!loggedInUser.emailVerified && email !== ADMIN_EMAIL.toLowerCase()) {
+                const verificationError = new Error("Please verify your email address before logging in. Check your inbox for the verification link.");
+                verificationError.code = 'auth/email-not-verified';
+                throw verificationError;
+            }
 
             const isAdminUser = email === ADMIN_EMAIL.toLowerCase();
 
@@ -155,6 +171,10 @@ export const AuthProvider = ({ children }) => {
             isAdmin: isAdminUser
         });
 
+        // IMMEDIATELY LOGOUT AFTER SIGNUP UNTIL VERIFIED
+        await signOut(auth);
+        setUser(null);
+
         return newUser;
     };
 
@@ -188,6 +208,21 @@ export const AuthProvider = ({ children }) => {
         const newValue = !darkMode;
         setDarkMode(newValue);
         await AsyncStorage.setItem('darkMode', JSON.stringify(newValue));
+    };
+
+    const resendVerification = async (userToVerify = null) => {
+        const targetUser = userToVerify || auth.currentUser;
+        if (targetUser) {
+            try {
+                await sendEmailVerification(targetUser);
+                return { success: true };
+            } catch (error) {
+                console.error("Resend Error:", error);
+                throw error;
+            }
+        } else {
+            throw new Error("No active user session found. Please log in again.");
+        }
     };
 
 
@@ -283,6 +318,7 @@ export const AuthProvider = ({ children }) => {
             isAdmin: user?.isAdmin || false,
             updateUser,
             resetPassword,
+            resendVerification,
             recordActivity,
             addStudyTime
         }}>

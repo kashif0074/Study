@@ -7,6 +7,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Toast from "react-native-toast-message";
 import { View, Text, Dimensions, Platform, ActivityIndicator } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
 import './firebase/config';
 
 // Screens
@@ -103,6 +104,7 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
+      <StatusBar style="auto" translucent={true} />
       <AuthProvider>
         {showSplash ? (
           <SplashScreen onFinish={() => setShowSplash(false)} />

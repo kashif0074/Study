@@ -17,7 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../context/AuthContext";
 
 export default function AuthScreen({ visible, onClose, isGuestMode = false }) {
-    const { login, signup, colors } = useAuth();
+    const { login, signup, logout, resendVerification, colors } = useAuth();
     const styles = getStyles(colors);
 
     const [isLogin, setIsLogin] = useState(true);
@@ -28,6 +28,8 @@ export default function AuthScreen({ visible, onClose, isGuestMode = false }) {
     const [agree, setAgree] = useState(false);
     const [remember, setRemember] = useState(false);
     const [isForgot, setIsForgot] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirm, setShowConfirm] = useState(false);
     const { resetPassword } = useAuth();
 
     // Load remembered email on mount
@@ -94,6 +96,17 @@ export default function AuthScreen({ visible, onClose, isGuestMode = false }) {
                     Alert.alert("Error", "Passwords do not match!");
                     return;
                 }
+
+                // Password Policy Validation
+                const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>])[A-Za-z\d!@#$%^&*(),.?":{}|<>]{8,}$/;
+                if (!passwordRegex.test(password)) {
+                    Alert.alert(
+                        "Weak Password",
+                        "Password must be at least 8 characters long and include:\n• One uppercase letter\n• One lowercase letter\n• One numerical digit\n• One special character"
+                    );
+                    return;
+                }
+
                 if (!agree) {
                     Alert.alert("Error", "Please agree to the Terms and Privacy Policy");
                     return;
@@ -109,9 +122,31 @@ export default function AuthScreen({ visible, onClose, isGuestMode = false }) {
                 setConfirm("");
             }
         } catch (error) {
-            console.error("Auth Error:", error.code, error.message);
+            console.error("Auth Error:", error.code || "CUSTOM", error.message);
 
             let errorMessage = "Something went wrong. Please try again.";
+
+            if (error.code === 'auth/email-not-verified' || error.message?.includes("verify your email")) {
+                Alert.alert(
+                    "Email Not Verified",
+                    error.message,
+                    [
+                        { text: "Cancel", style: "cancel" },
+                        { 
+                            text: "Resend Link", 
+                            onPress: async () => {
+                                try {
+                                    await resendVerification();
+                                    Alert.alert("Link Sent", "A new verification link has been sent to your email.");
+                                } catch (err) {
+                                    Alert.alert("Error", "Failed to send link. Please try logging in again first.");
+                                }
+                            }
+                        }
+                    ]
+                );
+                return;
+            }
 
             switch (error.code) {
                 case 'auth/email-already-in-use':
@@ -211,26 +246,50 @@ export default function AuthScreen({ visible, onClose, isGuestMode = false }) {
                                     color={colors.text}
                                 />
 
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="Password"
-                                    secureTextEntry
-                                    value={password}
-                                    onChangeText={setPassword}
-                                    placeholderTextColor={colors.placeholder}
-                                    color={colors.text}
-                                />
-
-                                {!isLogin && (
+                                <View style={styles.passwordContainer}>
                                     <TextInput
-                                        style={styles.input}
-                                        placeholder="Confirm Password"
-                                        secureTextEntry
-                                        value={confirm}
-                                        onChangeText={setConfirm}
+                                        style={styles.passwordInput}
+                                        placeholder="Password"
+                                        secureTextEntry={!showPassword}
+                                        value={password}
+                                        onChangeText={setPassword}
                                         placeholderTextColor={colors.placeholder}
                                         color={colors.text}
                                     />
+                                    <TouchableOpacity 
+                                        style={styles.eyeIcon}
+                                        onPress={() => setShowPassword(!showPassword)}
+                                    >
+                                        <Ionicons 
+                                            name={showPassword ? "eye-outline" : "eye-off-outline"} 
+                                            size={22} 
+                                            color={colors.subText} 
+                                        />
+                                    </TouchableOpacity>
+                                </View>
+
+                                {!isLogin && (
+                                    <View style={styles.passwordContainer}>
+                                        <TextInput
+                                            style={styles.passwordInput}
+                                            placeholder="Confirm Password"
+                                            secureTextEntry={!showConfirm}
+                                            value={confirm}
+                                            onChangeText={setConfirm}
+                                            placeholderTextColor={colors.placeholder}
+                                            color={colors.text}
+                                        />
+                                        <TouchableOpacity 
+                                            style={styles.eyeIcon}
+                                            onPress={() => setShowConfirm(!showConfirm)}
+                                        >
+                                            <Ionicons 
+                                                name={showConfirm ? "eye-outline" : "eye-off-outline"} 
+                                                size={22} 
+                                                color={colors.subText} 
+                                            />
+                                        </TouchableOpacity>
+                                    </View>
                                 )}
                             </>
                         )}
@@ -357,6 +416,24 @@ const getStyles = (colors) => StyleSheet.create({
         marginBottom: 14,
         fontSize: 16,
         color: colors.text,
+    },
+    passwordContainer: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: colors.white || "#fff",
+        borderWidth: 1.5,
+        borderColor: colors.border,
+        borderRadius: 16,
+        marginBottom: 14,
+    },
+    passwordInput: {
+        flex: 1,
+        padding: 16,
+        fontSize: 16,
+        color: colors.text,
+    },
+    eyeIcon: {
+        padding: 16,
     },
     row: {
         flexDirection: "row",

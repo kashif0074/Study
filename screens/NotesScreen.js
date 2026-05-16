@@ -1,8 +1,8 @@
 // screens/NotesScreen.js (COMPLETE & RESPONSIVE WITH AI FUNCTIONALITY)
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { StatusBar } from 'expo-status-bar';
 import { useFocusEffect } from "@react-navigation/native";
 import {
-    SafeAreaView,
     View,
     Text,
     StyleSheet,
@@ -17,8 +17,8 @@ import {
     Share,
     useWindowDimensions,
     ScrollView,
-    StatusBar,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
@@ -612,11 +612,7 @@ export default function NotesScreen({ navigation }) {
 
     return (
         <SafeAreaView style={styles.container}>
-            <StatusBar
-                backgroundColor="transparent"
-                translucent={true}
-                barStyle="light-content"
-            />
+            <StatusBar style="dark" />
             <LinearGradient colors={[colors.primary, colors.primary, colors.primary + "E6"]} style={styles.header}>
                 <Text style={[
                     styles.headerTitle,

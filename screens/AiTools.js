@@ -7,15 +7,14 @@ import {
     TouchableOpacity,
     Alert,
     Dimensions,
-    SafeAreaView,
     TextInput,
     Platform,
     ActivityIndicator,
     Image,
     KeyboardAvoidingView,
-    Modal,
-    StatusBar,
+    Modal
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
 import * as Speech from "expo-speech";
@@ -24,6 +23,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { useAuth } from "../context/AuthContext";
 import { askGemini } from "../constants/gemini";
 import CONFIG from "../constants/config";
+import { extractTextFromFile } from "../utils/ai";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const isTablet = screenWidth >= 768;
@@ -548,11 +548,17 @@ export default function AITools({ route, notes = [] }) {
 
         try {
             // Convert files to base64 inlineData format
+            let extractedTextFromFiles = "";
             const filesToSend = [];
             for (const file of filesToUse) {
-                // Ignore unsupported files
+                // Handle office documents via backend extraction
                 if (file.type === "DOC" || file.type === "PPT") {
-                    showToast("⚠️ Note", `${file.name} is a format not supported directly by this AI model yet. Skipping it.`);
+                    const text = await extractTextFromFile(file);
+                    if (text) {
+                        extractedTextFromFiles += `\n\n--- Content from ${file.name} ---\n${text}`;
+                    } else {
+                        showToast("⚠️ Note", `Could not extract text from ${file.name}.`);
+                    }
                     continue;
                 }
 
@@ -572,7 +578,8 @@ export default function AITools({ route, notes = [] }) {
             Format the output beautifully for a mobile app screen using markdown.
 
             Content to summarize:
-            ${textToUse}`;
+            ${textToUse}
+            ${extractedTextFromFiles}`;
 
             const responseText = await askGemini(prompt, filesToSend);
             setSummary(responseText);
@@ -602,9 +609,16 @@ export default function AITools({ route, notes = [] }) {
 
         try {
             // Convert files
+            let extractedTextFromFiles = "";
             const filesToSend = [];
             for (const file of filesToUse) {
-                if (file.type === "DOC" || file.type === "PPT") continue;
+                if (file.type === "DOC" || file.type === "PPT") {
+                    const text = await extractTextFromFile(file);
+                    if (text) {
+                        extractedTextFromFiles += `\n\n--- Content from ${file.name} ---\n${text}`;
+                    }
+                    continue;
+                }
                 try {
                     const base64 = await FileSystem.readAsStringAsync(file.uri, { encoding: 'base64' });
                     filesToSend.push({
@@ -625,7 +639,8 @@ export default function AITools({ route, notes = [] }) {
             Do not include any text, markdown formatting, or explanations outside of the JSON array.
 
             Content:
-            ${textToUse}`;
+            ${textToUse}
+            ${extractedTextFromFiles}`;
 
             const questions = await askGemini(prompt, filesToSend, true);
             
@@ -739,11 +754,6 @@ export default function AITools({ route, notes = [] }) {
 
     return (
         <SafeAreaView style={styles.safeArea}>
-            <StatusBar
-                backgroundColor="transparent"
-                translucent={true}
-                barStyle="light-content"
-            />
             <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                 <View style={styles.header}>
                     <TouchableOpacity onPress={() => setIsLeftSidebarOpen(true)} style={styles.historyToggleBtn}>
