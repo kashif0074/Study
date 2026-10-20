@@ -1,4 +1,3 @@
-// App.js (CORRECTED WITH ADMIN REDIRECT)
 import React, { useState, useEffect } from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
@@ -38,7 +37,6 @@ const verticalScaleFactor = height / 667;
 const scale = (size) => size * scaleFactor;
 const verticalScale = (size) => size * verticalScaleFactor;
 const moderateScale = (size, factor = 0.5) => size + (scale(size) - size) * factor;
-// -------------------------------------------------------------------------
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -104,10 +102,12 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <StatusBar style="auto" translucent={true} />
       <AuthProvider>
         {showSplash ? (
-          <SplashScreen onFinish={() => setShowSplash(false)} />
+          <>
+            <StatusBar style="auto" translucent={true} />
+            <SplashScreen onFinish={() => setShowSplash(false)} />
+          </>
         ) : (
           <AppContent />
         )}
@@ -118,11 +118,13 @@ export default function App() {
 
 // Main App Content - Handles Admin Redirect
 function AppContent() {
-  const { user, loading, isAdmin, colors, showAuth, closeAuth } = useAuth();
+  const { user, loading, isAdmin, colors, showAuth, closeAuth, darkMode } = useAuth();
+  const statusBarStyle = darkMode ? "light" : "dark";
 
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors?.background || '#FFFFFF' }}>
+        <StatusBar style={statusBarStyle} translucent={true} />
         <ActivityIndicator size="large" color={colors?.primary || '#6B21A8'} />
       </View>
     );
@@ -131,6 +133,7 @@ function AppContent() {
   if (user?.isAdmin) {
     return (
       <SafeAreaProvider>
+        <StatusBar style={statusBarStyle} translucent={true} />
         <AdminDashboard />
         <Toast />
       </SafeAreaProvider>
@@ -140,6 +143,7 @@ function AppContent() {
   // Normal / Guest flow
   return (
     <NavigationContainer>
+      <StatusBar style={statusBarStyle} translucent={true} />
       {!user ? (
         // 🏠 GUEST MODE: Only Home screen is visible, no bottom tabs
         <Stack.Navigator screenOptions={{ headerShown: false }}>

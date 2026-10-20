@@ -29,7 +29,7 @@ import { useAuth } from "../context/AuthContext";
 import CONFIG from "../constants/config";
 
 export default function NotesScreen({ navigation }) {
-    const { user, updateUser, colors } = useAuth();
+    const { user, updateUser, colors, darkMode } = useAuth();
     const styles = getStyles(colors);
     const { width, height } = useWindowDimensions();
 
@@ -382,7 +382,14 @@ export default function NotesScreen({ navigation }) {
             body: body
         })
         .then(async (response) => {
-            const data = await response.json();
+            const contentType = response.headers.get("content-type");
+            let data;
+            if (contentType && contentType.includes("application/json")) {
+                data = await response.json();
+            } else {
+                const text = await response.trim ? (await response.text()).trim() : await response.text();
+                throw new Error(`Server error (${response.status}): ${text.slice(0, 150)}`);
+            }
             if (!response.ok) {
                 throw new Error(data.message || "Failed to save note");
             }
@@ -612,7 +619,7 @@ export default function NotesScreen({ navigation }) {
 
     return (
         <SafeAreaView style={styles.container}>
-            <StatusBar style="dark" />
+            <StatusBar style={darkMode ? "light" : "dark"} />
             <LinearGradient colors={[colors.primary, colors.primary, colors.primary + "E6"]} style={styles.header}>
                 <Text style={[
                     styles.headerTitle,

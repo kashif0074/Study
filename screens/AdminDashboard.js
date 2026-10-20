@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import { StatusBar } from 'expo-status-bar';
 import {
     View,
     Text,
@@ -23,7 +24,7 @@ import Communities from "./Communities";
 function EditCommunityModal({ community, onClose, onUpdate, onDelete }) {
     const { width } = useWindowDimensions();
     const isTablet = width >= 768;
-    const { colors: themeColors } = useAuth();
+    const { colors: themeColors, darkMode } = useAuth();
     
     // Admin Dashboard styles are slightly different, we'll use local inline styles or adapted ones
     const [form, setForm] = useState({
@@ -55,6 +56,7 @@ function EditCommunityModal({ community, onClose, onUpdate, onDelete }) {
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: themeColors.background }}>
+            <StatusBar style={darkMode ? "light" : "dark"} />
             <KeyboardAvoidingView
                 behavior={Platform.OS === "ios" ? "padding" : "height"}
                 style={{ flex: 1 }}
@@ -190,7 +192,7 @@ function EditCommunityModal({ community, onClose, onUpdate, onDelete }) {
 }
 
 export default function AdminDashboard({ onBack }) {
-    const { colors, user, isAdmin, logout } = useAuth();
+    const { colors, user, isAdmin, logout, darkMode } = useAuth();
     const { width, height } = useWindowDimensions();
 
     const isTablet = width >= 768;
@@ -450,11 +452,15 @@ export default function AdminDashboard({ onBack }) {
     const renderHeader = () => (
         <View style={styles.header}>
             <View style={[styles.headerInner, { maxWidth: responsiveWidth, alignSelf: 'center', width: '100%' }]}>
-                {activeSection !== "menu" && (
+                {activeSection !== "menu" ? (
                     <TouchableOpacity onPress={() => setActiveSection("menu")} style={styles.backBtn}>
                         <Ionicons name="arrow-back" size={moderateScale(24)} color={colors.white} />
                     </TouchableOpacity>
-                )}
+                ) : onBack ? (
+                    <TouchableOpacity onPress={onBack} style={styles.backBtn}>
+                        <Ionicons name="arrow-back" size={moderateScale(24)} color={colors.white} />
+                    </TouchableOpacity>
+                ) : null}
                 <Text style={[styles.headerTitle, { fontSize: fontSize['3xl'] }]}>
                     {activeSection === "menu" ? "Admin Dashboard" : "Admin Dashboard"}
                 </Text>
@@ -464,6 +470,7 @@ export default function AdminDashboard({ onBack }) {
 
     return (
         <SafeAreaView style={styles.safeArea}>
+            <StatusBar style={darkMode ? "light" : "dark"} />
             {activeSection === "menu" && renderHeader()}
 
             {activeSection === "menu" ? (
@@ -603,17 +610,7 @@ export default function AdminDashboard({ onBack }) {
                             </View>
                         )}
 
-                        {/* Content Quality Alerts Section */}
-                        <Text style={[styles.sectionTitle, { fontSize: fontSize.xl }]}>Content Quality Alerts</Text>
-                        <View style={styles.alertCardYellow}>
-                            <View style={styles.alertCardContent}>
-                                <Ionicons name="warning" size={moderateScale(22)} color="#D97706" />
-                                <Text style={[styles.alertCardText, { fontSize: fontSize.base }]}>3 posts reported for spam</Text>
-                            </View>
-                            <TouchableOpacity onPress={() => Alert.alert("Review", "Reviewing reported content...")}>
-                                <Text style={[styles.reviewLinkText, { fontSize: fontSize.base }]}>Review</Text>
-                            </TouchableOpacity>
-                        </View>
+
 
                         <View style={{ height: 100 }} />
                     </ScrollView>

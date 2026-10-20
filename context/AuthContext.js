@@ -23,80 +23,79 @@ export const AuthProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
     const [showAuth, setShowAuth] = useState(false);
     const [darkMode, setDarkMode] = useState(false);
+
+    // Helper to fetch MongoDB profile with timeout
+    const fetchProfile = async (email) => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+      try {
+        const resp = await fetch(`${CONFIG.API_URLS.AUTH}/profile/${email}`, { signal: controller.signal });
+        if (resp.ok) {
+          const profile = await resp.json();
+          console.log("📊 MongoDB Profile loaded:", profile.email);
+          return profile;
+        } else {
+          console.warn("⚠️ MongoDB profile fetch failed with status", resp.status);
+        }
+      } catch (err) {
+        if (err.name === 'AbortError') {
+          console.warn("⏱️ MongoDB profile fetch timed out");
+        } else {
+          console.warn("⚠️ Error fetching MongoDB profile", err);
+        }
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    };
+    
     useEffect(() => {
-        console.log("🔥 Auth Listener Started");
+      console.log("🔥 Auth Listener Started");
 
-        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-            if (currentUser) {
-                const cleanEmail = currentUser.email ? currentUser.email.trim().toLowerCase() : "";
-                const isAdminUser = cleanEmail === ADMIN_EMAIL.toLowerCase();
+      const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+        if (currentUser) {
+          const cleanEmail = currentUser.email ? currentUser.email.trim().toLowerCase() : "";
+          const isAdminUser = cleanEmail === ADMIN_EMAIL.toLowerCase();
+          console.log("📌 Auth State Changed → Email:", cleanEmail, "| isAdmin:", isAdminUser);
 
-                console.log("📌 Auth State Changed → Email:", cleanEmail, "| isAdmin:", isAdminUser);
+          // Start async profile fetch, but don't await to avoid blocking UI
+          fetchProfile(cleanEmail).then((mongoProfile = {}) => {
+            // Merge profile once fetched
+            setUser(prev => {
+              const existingName = prev?.name;
+              const emailFallback = cleanEmail.split('@')[0];
+              const backendName = mongoProfile.name;
+              const firebaseName = currentUser.displayName;
 
-                // Fetch MongoDB profile data to merge with Firebase user
-                let mongoProfile = {};
-                try {
-                    const profileResp = await fetch(`${CONFIG.API_URLS.AUTH}/profile/${cleanEmail}`);
-                    if (profileResp.ok) {
-                        mongoProfile = await profileResp.json();
-                        console.log("📊 MongoDB Profile loaded:", mongoProfile.email);
-                    }
-                } catch (err) {
-                    console.warn("⚠️ Could not fetch MongoDB profile:", err);
-                }
+              const isGeneric = (n) => !n || n === "Student" || n === "User" || n === "Loading..." || n === emailFallback;
+              let resolvedName = "User";
+              if (!isGeneric(backendName)) resolvedName = backendName;
+              else if (!isGeneric(existingName)) resolvedName = existingName;
+              else if (!isGeneric(firebaseName)) resolvedName = firebaseName;
+              else resolvedName = emailFallback || "User";
 
-                const emailFallback = cleanEmail.split('@')[0];
-                const backendName = mongoProfile.name;
-                const firebaseName = currentUser.displayName;
+              return {
+                ...currentUser,
+                ...mongoProfile,
+                name: resolvedName,
+                uid: currentUser.uid,
+                isAdmin: isAdminUser,
+              };
+            });
+          }).catch(err => {
+            console.warn("Profile fetch error (non-blocking):", err);
+          });
 
-                // CHECK EMAIL VERIFICATION
-                if (!currentUser.emailVerified && cleanEmail !== ADMIN_EMAIL.toLowerCase()) {
-                    console.log("🚫 Email not verified, logging out...");
-                    setUser(null);
-                    setLoading(false);
-                    return;
-                }
-                
-                setUser(prev => {
-                    const existingName = prev?.name;
-                    
-                    // Determine if names are generic (Student, User, or email prefix)
-                    const isGeneric = (n) => !n || n === "Student" || n === "User" || n === "Loading..." || n === emailFallback;
-                    
-                    // Priority Order:
-                    // 1. Valid name from MongoDB
-                    // 2. Existing name in state (from signup/update)
-                    // 3. Valid name from Firebase Profile
-                    // 4. Email prefix (last resort)
-                    
-                    let resolvedName = "User";
-                    
-                    if (!isGeneric(backendName)) {
-                        resolvedName = backendName;
-                    } else if (!isGeneric(existingName)) {
-                        resolvedName = existingName;
-                    } else if (!isGeneric(firebaseName)) {
-                        resolvedName = firebaseName;
-                    } else {
-                        resolvedName = emailFallback || "User";
-                    }
+          // Set user with minimal info first
+          setUser(currentUser);
+          setLoading(false);
+        } else {
+          console.log("👤 No user logged in");
+          setUser(null);
+          setLoading(false);
+        }
+      });
 
-                    return {
-                        ...currentUser,
-                        ...mongoProfile,
-                        name: resolvedName,
-                        uid: currentUser.uid,
-                        isAdmin: isAdminUser
-                    };
-                });
-            } else {
-                console.log("👤 No user logged in");
-                setUser(null);
-            }
-            setLoading(false);
-        });
-
-        return unsubscribe;
+      return unsubscribe;
     }, []);
 
     const login = async (emailInput, password) => {

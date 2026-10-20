@@ -59,6 +59,7 @@ const aiHistoryRoutes = require('./routes/aiHistory');
 const communityRoutes = require('./routes/communities');
 const adminRoutes = require('./routes/admin');
 const utilsRoutes = require('./routes/utils');
+const aiRoutes = require('./routes/ai');
 
 // Use Routes
 app.use('/api/auth', authRoutes);
@@ -68,8 +69,23 @@ app.use('/api/ai-history', aiHistoryRoutes);
 app.use('/api/communities', communityRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/utils', utilsRoutes);
+app.use('/api/ai', aiRoutes);
 
 // Start Server
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server is running on http://0.0.0.0:${PORT}`);
+    
+    // Asynchronously load the T5 summarization model in the background
+    const summarizationService = require('./services/summarizationService');
+    summarizationService.loadModel()
+        .then((result) => {
+            if (result.status === 'ready') {
+                console.log("🤖 [AI MODEL] Summarization model loaded successfully and ready for inference!");
+            } else {
+                console.log(`🤖 [AI MODEL] Summarization service load status: ${result.status}`);
+            }
+        })
+        .catch((err) => {
+            console.error("❌ [AI MODEL] Failed to initialize summarization service:", err);
+        });
 });

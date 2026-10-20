@@ -25,8 +25,39 @@ import { askGemini } from "../constants/gemini";
 import CONFIG from "../constants/config";
 import { extractTextFromFile } from "../utils/ai";
 
+const parseDateDDMMYYYY = (dateStr) => {
+  if (!dateStr) return new Date();
+  if (typeof dateStr === 'string' && dateStr.includes('/')) {
+    const parts = dateStr.split('/');
+    if (parts.length === 3) {
+      const day = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const year = parseInt(parts[2], 10);
+      return new Date(year, month, day);
+    }
+  }
+  return new Date(dateStr);
+};
+
+const formatDateToDDMMYYYY = (dateInput) => {
+  if (!dateInput) return "";
+  if (typeof dateInput === 'string' && /^\d{2}\/\d{2}\/\d{4}$/.test(dateInput)) {
+    return dateInput;
+  }
+  try {
+    const d = parseDateDDMMYYYY(dateInput);
+    if (isNaN(d.getTime())) return dateInput;
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
+  } catch (e) {
+    return dateInput;
+  }
+};
+
 export default function StudyPlanner({ navigation }) {
-  const { user, updateUser, colors, recordActivity, addStudyTime } = useAuth();
+  const { user, updateUser, colors, recordActivity, addStudyTime, darkMode } = useAuth();
   const { width, height } = useWindowDimensions();
 
   // ✅ Track Study Time
@@ -315,7 +346,16 @@ export default function StudyPlanner({ navigation }) {
       return;
     }
 
-    const examDate = new Date(newExam.date);
+    const dateRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+    const match = newExam.date.match(dateRegex);
+    if (!match) {
+      showToast("Error", "Date must be in DD/MM/YYYY format");
+      return;
+    }
+    const day = parseInt(match[1], 10);
+    const month = parseInt(match[2], 10) - 1;
+    const year = parseInt(match[3], 10);
+    const examDate = new Date(year, month, day);
     const today = new Date();
     const daysUntilExam = differenceInDays(examDate, today);
 
@@ -334,7 +374,7 @@ export default function StudyPlanner({ navigation }) {
 
       Return a valid JSON array of session objects. Each object MUST have:
       - "topic": The specific topic or sub-topic to focus on.
-      - "date": Date in "YYYY-MM-DD" format. You must space these out starting from today, and filling up the days exactly up until the exam date (${format(examDate, 'yyyy-MM-dd')}). Do not stop early.
+      - "date": Date in "DD/MM/YYYY" format. You must space these out starting from today, and filling up the days exactly up until the exam date (${newExam.date}). Do not stop early.
       - "time": Suggested start time in "HH:MM" (24h format).
       - "duration": Duration in minutes (e.g., 60, 90, 120).
 
@@ -440,7 +480,7 @@ export default function StudyPlanner({ navigation }) {
     showToast("Great!", "Session marked complete!");
   };
 
-  const getDaysUntil = (dateStr) => differenceInDays(new Date(dateStr), new Date());
+  const getDaysUntil = (dateStr) => differenceInDays(parseDateDDMMYYYY(dateStr), new Date());
 
   const todaysSessions = studySessions.filter((s) => s.date === format(new Date(), "yyyy-MM-dd"));
   const upcomingSessions = studySessions.filter((s) => s.date > format(new Date(), "yyyy-MM-dd"));
@@ -460,7 +500,7 @@ export default function StudyPlanner({ navigation }) {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
-        <StatusBar style="dark" />
+        <StatusBar style={darkMode ? "light" : "dark"} />
         <ScrollView
           style={styles.container}
           contentContainerStyle={[styles.scroll, { maxWidth: responsiveWidth, alignSelf: 'center', width: '100%', flexGrow: 1 }]}
@@ -542,7 +582,7 @@ export default function StudyPlanner({ navigation }) {
                         />
                       </View>
                       <Text style={[styles.examDate, { fontSize: fontSize.base }]}>
-                        {format(new Date(exam.date), "d MMMM yyyy")} • {daysLeft} days
+                        {formatDateToDDMMYYYY(exam.date)} • {daysLeft} days
                       </Text>
                       <View style={styles.fileTags}>
                         {exam.files.map((f, i) => (
@@ -583,6 +623,7 @@ export default function StudyPlanner({ navigation }) {
           behavior={Platform.OS === "ios" ? "padding" : "height"}
         >
           <SafeAreaView style={[styles.modalSafeArea, { maxWidth: responsiveWidth, alignSelf: 'center', width: '100%', overflow: 'hidden' }]}>
+            <StatusBar style={darkMode ? "light" : "dark"} />
             <View style={styles.modal}>
               <View style={styles.modalHeader}>
                 <Text style={[styles.modalTitle, { fontSize: fontSize['2xl'] }]}>
@@ -621,7 +662,7 @@ export default function StudyPlanner({ navigation }) {
                   </Text>
                   <TextInput
                     style={[styles.input, { fontSize: fontSize.base }]}
-                    placeholder="YYYY-MM-DD"
+                    placeholder="DD/MM/YYYY"
                     value={newExam.date}
                     onChangeText={(t) => setNewExam({ ...newExam, date: t })}
                     placeholderTextColor={colors.placeholder}

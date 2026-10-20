@@ -20,6 +20,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
 import { useAuth } from "../context/AuthContext";
+import AdminDashboard from "./AdminDashboard";
 
 import CONFIG from "../constants/config";
 
@@ -48,6 +49,7 @@ export default function ProfileScreen() {
 
 
     const [accountModal, setAccountModal] = useState(false);
+    const [adminView, setAdminView] = useState(false);
 
     const [profile, setProfile] = useState({
         name: user?.name || "Loading...",
@@ -115,9 +117,6 @@ export default function ProfileScreen() {
                 const uploadResponse = await fetch(`${CONFIG.API_URLS.AUTH}/upload-avatar`, {
                     method: 'POST',
                     body: formData,
-                    headers: {
-                        'Content-Type': 'multipart/form-data',
-                    },
                 });
 
                 const uploadData = await uploadResponse.json();
@@ -177,9 +176,13 @@ export default function ProfileScreen() {
         );
     }
 
+    if (adminView) {
+        return <AdminDashboard onBack={() => setAdminView(false)} />;
+    }
+
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-            <StatusBar style="dark" />
+            <StatusBar style={darkMode ? "light" : "dark"} />
             <ScrollView style={styles.container}>
 
                 {/* Header */}

@@ -15,9 +15,40 @@ import { format } from "date-fns";
 import { useAuth } from "../context/AuthContext";
 import CONFIG from "../constants/config";
 
+const parseDateDDMMYYYY = (dateStr) => {
+  if (!dateStr) return new Date();
+  if (typeof dateStr === 'string' && dateStr.includes('/')) {
+    const parts = dateStr.split('/');
+    if (parts.length === 3) {
+      const day = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const year = parseInt(parts[2], 10);
+      return new Date(year, month, day);
+    }
+  }
+  return new Date(dateStr);
+};
+
+const formatDateToDDMMYYYY = (dateInput) => {
+  if (!dateInput) return "";
+  if (typeof dateInput === 'string' && /^\d{2}\/\d{2}\/\d{4}$/.test(dateInput)) {
+    return dateInput;
+  }
+  try {
+    const d = parseDateDDMMYYYY(dateInput);
+    if (isNaN(d.getTime())) return dateInput;
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
+  } catch (e) {
+    return dateInput;
+  }
+};
+
 export default function StudyPlanDetailScreen({ route, navigation }) {
   const { exam, sessions, allExams, allSessions } = route.params;
-  const { user, updateUser, colors, recordActivity, addStudyTime } = useAuth();
+  const { user, updateUser, colors, recordActivity, addStudyTime, darkMode } = useAuth();
   const { width, height } = useWindowDimensions();
 
   // ✅ Track Study Time
@@ -117,7 +148,7 @@ export default function StudyPlanDetailScreen({ route, navigation }) {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="dark" />
+      <StatusBar style={darkMode ? "light" : "dark"} />
       
       {/* Header */}
       <View style={styles.header}>
@@ -128,7 +159,7 @@ export default function StudyPlanDetailScreen({ route, navigation }) {
           <View style={styles.headerText}>
             <Text style={[styles.headerTitle, { fontSize: fontSize['2xl'] }]}>{exam.subject}</Text>
             <Text style={[styles.headerSubtitle, { fontSize: fontSize.base }]}>
-              {format(new Date(exam.date), "d MMMM yyyy")}
+              {formatDateToDDMMYYYY(exam.date)}
             </Text>
           </View>
         </View>
@@ -158,7 +189,7 @@ export default function StudyPlanDetailScreen({ route, navigation }) {
               >
                 <View style={styles.sessionTimeContainer}>
                   <Text style={[styles.sessionDate, { fontSize: fontSize.sm }]}>
-                    {format(new Date(session.date), "d MMM yyyy")}
+                    {formatDateToDDMMYYYY(session.date)}
                   </Text>
                   <Text style={[styles.sessionTime, { fontSize: fontSize.lg }]}>{session.time}</Text>
                 </View>

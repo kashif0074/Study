@@ -4,11 +4,16 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 
 // Multer Storage Configuration for Avatars
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        cb(null, 'uploads/avatars/');
+        const uploadDir = path.join(__dirname, '../uploads/avatars');
+        if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        cb(null, uploadDir);
     },
     filename: (req, file, cb) => {
         cb(null, 'avatar-' + Date.now() + path.extname(file.originalname));

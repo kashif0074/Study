@@ -24,6 +24,7 @@ import { useAuth } from "../context/AuthContext";
 import { askGemini } from "../constants/gemini";
 import CONFIG from "../constants/config";
 import { extractTextFromFile } from "../utils/ai";
+import aiService from "../services/aiService";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const isTablet = screenWidth >= 768;
@@ -144,6 +145,14 @@ export default function AITools({ route, notes = [] }) {
                         aiFileType = "PDF";
                         aiFileIcon = "document";
                         aiFileColor = colors.danger;
+                    } else if (noteType === "doc" || noteType === "docx" || fileExt === 'doc' || fileExt === 'docx') {
+                        aiFileType = "DOC";
+                        aiFileIcon = "document-text";
+                        aiFileColor = colors.info;
+                    } else if (noteType === "ppt" || noteType === "pptx" || fileExt === 'ppt' || fileExt === 'pptx') {
+                        aiFileType = "PPT";
+                        aiFileIcon = "document-attach";
+                        aiFileColor = colors.success;
                     } else if (noteType === "image") {
                         aiFileType = "IMAGE";
                         aiFileIcon = "image";
@@ -534,6 +543,112 @@ export default function AITools({ route, notes = [] }) {
         setSelectedNoteId("");
     };
 
+    const localSummarizeText = (text) => {
+        if (!text || !text.trim()) return "No content provided to summarize.";
+
+        const cleanedText = text.trim();
+        
+        // Stop words list to ignore common English words
+        const stopWords = new Set([
+            "i", "me", "my", "myself", "we", "our", "ours", "ourselves", "you", "your", "yours", 
+            "yourself", "yourselves", "he", "him", "his", "himself", "she", "her", "hers", 
+            "herself", "it", "its", "itself", "they", "them", "their", "theirs", "themselves", 
+            "what", "which", "who", "whom", "this", "that", "these", "those", "am", "is", "are", 
+            "was", "were", "be", "been", "being", "have", "has", "had", "having", "do", "does", 
+            "did", "doing", "a", "an", "the", "and", "but", "if", "or", "because", "as", "until", 
+            "while", "of", "at", "by", "for", "with", "about", "against", "between", "into", 
+            "through", "during", "before", "after", "above", "below", "to", "from", "up", "down", 
+            "in", "out", "on", "off", "over", "under", "again", "further", "then", "once", "here", 
+            "there", "when", "where", "why", "how", "all", "any", "both", "each", "few", "more", 
+            "most", "other", "some", "such", "no", "nor", "not", "only", "own", "same", "so", 
+            "than", "too", "very", "s", "t", "can", "will", "just", "don", "should", "now"
+        ]);
+
+        // Tokenize words to calculate frequencies
+        const words = cleanedText.toLowerCase().match(/\b[a-z]{3,}\b/g) || [];
+        const frequencyMap = {};
+        let maxFreq = 0;
+
+        words.forEach(word => {
+            if (!stopWords.has(word)) {
+                frequencyMap[word] = (frequencyMap[word] || 0) + 1;
+                if (frequencyMap[word] > maxFreq) {
+                    maxFreq = frequencyMap[word];
+                }
+            }
+        });
+
+        // Normalize frequencies
+        if (maxFreq > 0) {
+            Object.keys(frequencyMap).forEach(word => {
+                frequencyMap[word] = frequencyMap[word] / maxFreq;
+            });
+        }
+
+        // Split into sentences (by periods, exclamation marks, question marks)
+        const sentences = cleanedText
+            .replace(/([.?!])\s+(?=[A-Za-z])/g, "$1|")
+            .split("|")
+            .map(s => s.trim())
+            .filter(s => s.length > 10);
+
+        if (sentences.length === 0) {
+            return "The provided text is too short to generate a meaningful summary.";
+        }
+
+        // Score sentences based on word frequency
+        const sentenceScores = sentences.map((sentence, index) => {
+            const sentenceWords = sentence.toLowerCase().match(/\b[a-z]{3,}\b/g) || [];
+            let score = 0;
+            sentenceWords.forEach(word => {
+                if (frequencyMap[word]) {
+                    score += frequencyMap[word];
+                }
+            });
+            
+            const wordCount = sentenceWords.length;
+            const normalizedScore = wordCount > 0 ? score / wordCount : 0;
+
+            return {
+                sentence,
+                index,
+                score: normalizedScore
+            };
+        });
+
+        // Select key sentences (Top 5-7 based on input size)
+        const targetCount = Math.min(Math.max(Math.round(sentences.length * 0.2), 3), 7);
+        
+        const topSentences = [...sentenceScores]
+            .sort((a, b) => b.score - a.score)
+            .slice(0, targetCount)
+            .sort((a, b) => a.index - b.index)
+            .map(s => s.sentence);
+
+        // Extract high-frequency keywords
+        const keywords = Object.entries(frequencyMap)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(entry => entry[0].charAt(0).toUpperCase() + entry[0].slice(1));
+
+        // Format beautifully as markdown
+        let summaryMarkdown = `### 📚 StudySpark Smart Summary\n\n`;
+        
+        if (keywords.length > 0) {
+            summaryMarkdown += `**🔑 Key Themes:** ${keywords.join(" • ")}\n\n`;
+        }
+        
+        summaryMarkdown += `**📝 Core Concepts:**\n`;
+        topSentences.forEach((sentence) => {
+            let cleanSentence = sentence.replace(/^[-*•\d+.]\s+/, "");
+            summaryMarkdown += `* ${cleanSentence}\n`;
+        });
+
+        summaryMarkdown += `\n> *This summary was generated locally using StudySpark's smart sentence extractor, without calling the external Gemini API.*`;
+
+        return summaryMarkdown;
+    };
+
     const handleSummarize = async (overrideText = null, overrideFiles = null) => {
         const textToUse = typeof overrideText === 'string' ? overrideText : inputText;
         const filesToUse = Array.isArray(overrideFiles) ? overrideFiles : uploadedFiles;
@@ -547,44 +662,102 @@ export default function AITools({ route, notes = [] }) {
         setSummary("");
 
         try {
-            // Convert files to base64 inlineData format
             let extractedTextFromFiles = "";
-            const filesToSend = [];
             for (const file of filesToUse) {
-                // Handle office documents via backend extraction
-                if (file.type === "DOC" || file.type === "PPT") {
+                // 1. PDF, Word (DOC), and PowerPoint (PPT) files
+                if (file.type === "DOC" || file.type === "PPT" || file.type === "PDF") {
+                    console.log(`Extracting text from document: ${file.name}`);
                     const text = await extractTextFromFile(file);
                     if (text) {
                         extractedTextFromFiles += `\n\n--- Content from ${file.name} ---\n${text}`;
                     } else {
-                        showToast("⚠️ Note", `Could not extract text from ${file.name}.`);
+                        // Fallback to Gemini text extraction if backend fails or doesn't support the format
+                        try {
+                            console.log(`Backend extraction failed for ${file.name}, falling back to Gemini...`);
+                            const base64 = await FileSystem.readAsStringAsync(file.uri, { encoding: 'base64' });
+                            const prompt = "Extract and return all raw text content from this document. Do not summarize or add notes. Just return the extracted text.";
+                            const extracted = await askGemini(prompt, [{ mimeType: file.mimeType || 'application/pdf', base64 }]);
+                            if (extracted) {
+                                extractedTextFromFiles += `\n\n--- Content from ${file.name} ---\n${extracted}`;
+                            } else {
+                                showToast("⚠️ Extraction Note", `Could not extract text from ${file.name}.`);
+                            }
+                        } catch (fallbackErr) {
+                            console.error("Gemini fallback text extraction failed:", fallbackErr);
+                            showToast("⚠️ Extraction Note", `Could not extract text from ${file.name}.`);
+                        }
                     }
-                    continue;
                 }
-
-                try {
-                    const base64 = await FileSystem.readAsStringAsync(file.uri, { encoding: 'base64' });
-                    filesToSend.push({
-                        mimeType: file.mimeType || 'application/pdf',
-                        base64: base64
-                    });
-                } catch(e) {
-                    console.error("Failed to read file", file.name, e);
+                // 2. Plain Text (TXT) files
+                else if (file.type === "TXT") {
+                    try {
+                        const text = await FileSystem.readAsStringAsync(file.uri);
+                        if (text) {
+                            extractedTextFromFiles += `\n\n--- Content from ${file.name} ---\n${text}`;
+                        }
+                    } catch (err) {
+                        console.error("Error reading plain text file:", err);
+                        showToast("⚠️ Extraction Note", `Could not read text file ${file.name}.`);
+                    }
+                }
+                // 3. Audio/Voice files (transcribe to text first)
+                else if (file.type === "AUDIO") {
+                    try {
+                        console.log(`Transcribing audio file: ${file.name}`);
+                        const base64 = await FileSystem.readAsStringAsync(file.uri, { encoding: 'base64' });
+                        const prompt = "Transcribe the following audio file. Return only the transcription. Do not add any formatting, notes, headers, or conversational text. If no speech is found, return nothing.";
+                        const transcription = await askGemini(prompt, [{ mimeType: file.mimeType || 'audio/mpeg', base64 }]);
+                        if (transcription && transcription.trim()) {
+                            extractedTextFromFiles += `\n\n--- Audio Transcription from ${file.name} ---\n${transcription}`;
+                        } else {
+                            showToast("⚠️ Transcription Note", `No speech detected in audio file ${file.name}.`);
+                        }
+                    } catch (err) {
+                        console.error("Error transcribing audio:", err);
+                        showToast("⚠️ Transcription Note", `Could not transcribe audio file ${file.name}.`);
+                    }
+                }
+                // 4. Image files (OCR to text first)
+                else if (file.type === "IMAGE") {
+                    try {
+                        console.log(`Performing OCR on image: ${file.name}`);
+                        const base64 = await FileSystem.readAsStringAsync(file.uri, { encoding: 'base64' });
+                        const prompt = "Perform OCR on this image. Extract and return all text present in the image. Return only the extracted text. Do not add any conversational framing, commentary, notes, or descriptions.";
+                        const extracted = await askGemini(prompt, [{ mimeType: file.mimeType || 'image/jpeg', base64 }]);
+                        if (extracted && extracted.trim()) {
+                            extractedTextFromFiles += `\n\n--- OCR Text from ${file.name} ---\n${extracted}`;
+                        } else {
+                            showToast("⚠️ OCR Note", `No text found in image ${file.name}.`);
+                        }
+                    } catch (err) {
+                        console.error("Error performing OCR on image:", err);
+                        showToast("⚠️ OCR Note", `Could not perform OCR on image ${file.name}.`);
+                    }
                 }
             }
 
-            const prompt = `You are an expert academic tutor. Provide a precise, well-structured summary. 
-            Highlight the key concepts, main take-away points, and any important definitions using bullet points. 
-            Format the output beautifully for a mobile app screen using markdown.
+            const combinedText = `${textToUse}${extractedTextFromFiles ? `\n\n${extractedTextFromFiles}` : ''}`;
+            
+            let responseText = "";
+            let usingLocalFallback = false;
 
-            Content to summarize:
-            ${textToUse}
-            ${extractedTextFromFiles}`;
-
-            const responseText = await askGemini(prompt, filesToSend);
+            try {
+                // Attempt to use the trained T5 model on the backend
+                responseText = await aiService.summarize(combinedText);
+            } catch (err) {
+                console.warn("⚠️ Custom T5 backend summarizer failed, falling back to local extractor:", err.message);
+                responseText = localSummarizeText(combinedText);
+                usingLocalFallback = true;
+            }
+            
             setSummary(responseText);
             saveToHistory("summary", responseText, deriveTitle("Summary"));
-            showToast("✅ Summary Ready!", "AI has analyzed your content.");
+            
+            if (usingLocalFallback) {
+                showToast("⚠️ Local Summary Ready", "Trained model was offline or still loading. Generated a smart local summary instead.");
+            } else {
+                showToast("✅ Model Summary Ready!", "Trained T5 model successfully summarized your content.");
+            }
         } catch (error) {
             console.error("AI Summarize Error:", error);
             showToast("❌ AI Error", "Failed to generate summary. Please check your connection.");

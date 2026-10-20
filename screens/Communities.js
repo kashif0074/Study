@@ -189,7 +189,7 @@ const PostCard = ({ post, onLike, onComment, isAdmin, onAdminAction }) => {
 export default function Communities({ onBack }) {
     const { width } = useWindowDimensions();
     const isTablet = width >= 768;
-    const { colors, isAdmin, user } = useAuth();
+    const { colors, isAdmin, user, darkMode } = useAuth();
     const styles = getStyles(colors, isTablet);
     const [searchQuery, setSearchQuery] = useState("");
     const [showCreatePost, setShowCreatePost] = useState(false);
@@ -356,7 +356,6 @@ export default function Communities({ onBack }) {
                     body: formData,
                     headers: {
                         'Accept': 'application/json',
-                        'Content-Type': 'multipart/form-data',
                     },
                 });
 
@@ -503,7 +502,7 @@ export default function Communities({ onBack }) {
 
     return (
         <SafeAreaView style={styles.safeArea}>
-            <StatusBar style="dark" />
+            <StatusBar style={darkMode ? "light" : "dark"} />
             <ScrollView
                 style={styles.container}
                 contentContainerStyle={[styles.scroll, { maxWidth: responsiveWidth, alignSelf: 'center', width: '100%' }]}
@@ -785,10 +784,11 @@ export default function Communities({ onBack }) {
 function CommunityDetail({ community, posts, onBack, onCreatePost, onLike, onComment, isAdmin, onAdminAction }) {
     const { width } = useWindowDimensions();
     const isTablet = width >= 768;
-    const { colors } = useAuth();
+    const { colors, darkMode } = useAuth();
     const styles = getStyles(colors, isTablet);
     return (
         <SafeAreaView style={styles.safeArea}>
+            <StatusBar style={darkMode ? "light" : "dark"} />
             <View style={styles.detailContainer}>
                 <View style={[styles.detailHeader, { backgroundColor: community?.color || colors.primary }]}>
                     <View style={{ maxWidth: responsiveWidth, alignSelf: 'center', width: '100%' }}>
@@ -866,7 +866,7 @@ function CommunityDetail({ community, posts, onBack, onCreatePost, onLike, onCom
 function CreatePostModal({ onClose, onPost }) {
     const { width } = useWindowDimensions();
     const isTablet = width >= 768;
-    const { colors } = useAuth();
+    const { colors, darkMode } = useAuth();
     const styles = getStyles(colors, isTablet);
     const [content, setContent] = useState("");
     const [type, setType] = useState("note");
@@ -928,6 +928,7 @@ function CreatePostModal({ onClose, onPost }) {
 
     return (
         <SafeAreaView style={styles.createModalContainer}>
+            <StatusBar style={darkMode ? "light" : "dark"} />
             <KeyboardAvoidingView
                 behavior={Platform.OS === "ios" ? "padding" : "height"}
                 style={styles.createModalInner}
@@ -1020,7 +1021,7 @@ function CreatePostModal({ onClose, onPost }) {
 function CreateCommunityModal({ onClose, onCreate }) {
     const { width } = useWindowDimensions();
     const isTablet = width >= 768;
-    const { colors: themeColors } = useAuth();
+    const { colors: themeColors, darkMode } = useAuth();
     const styles = getStyles(themeColors, isTablet);
     const [form, setForm] = useState({
         name: "",
@@ -1051,6 +1052,7 @@ function CreateCommunityModal({ onClose, onCreate }) {
 
     return (
         <SafeAreaView style={styles.createCommunityModalContainer}>
+            <StatusBar style={darkMode ? "light" : "dark"} />
             <KeyboardAvoidingView
                 behavior={Platform.OS === "ios" ? "padding" : "height"}
                 style={styles.createCommunityModalInner}
@@ -1145,7 +1147,7 @@ function CreateCommunityModal({ onClose, onCreate }) {
 function EditCommunityModal({ community, onClose, onUpdate, onDelete }) {
     const { width } = useWindowDimensions();
     const isTablet = width >= 768;
-    const { colors: themeColors } = useAuth();
+    const { colors: themeColors, darkMode } = useAuth();
     const styles = getStyles(themeColors, isTablet);
     const [form, setForm] = useState({
         id: community?.id,
@@ -1176,6 +1178,7 @@ function EditCommunityModal({ community, onClose, onUpdate, onDelete }) {
 
     return (
         <SafeAreaView style={styles.createCommunityModalContainer}>
+            <StatusBar style={darkMode ? "light" : "dark"} />
             <KeyboardAvoidingView
                 behavior={Platform.OS === "ios" ? "padding" : "height"}
                 style={styles.createCommunityModalInner}

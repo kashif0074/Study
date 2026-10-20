@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const { officeTextExtractor } = require('office-text-extractor');
+const { getTextExtractor } = require('office-text-extractor');
 const mammoth = require('mammoth');
 const fs = require('fs');
 const path = require('path');
@@ -51,7 +51,7 @@ router.post('/extract-text', upload.single('file'), async (req, res) => {
         } 
         // Fallback to office-text-extractor for PPTX and others
         else {
-            const extractor = officeTextExtractor();
+            const extractor = getTextExtractor();
             text = await extractor.extractText(filePath);
             console.log("✅ Office-text-extractor extracted text successfully");
         }

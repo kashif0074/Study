@@ -11,14 +11,18 @@ import {
     KeyboardAvoidingView,
     Modal,
     Alert,
+    useWindowDimensions,
 } from "react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from "@expo/vector-icons";
+import { StatusBar } from "expo-status-bar";
 import { useAuth } from "../context/AuthContext";
 
 export default function AuthScreen({ visible, onClose, isGuestMode = false }) {
+    const { width } = useWindowDimensions();
+    const isTablet = width >= 768;
     const { login, signup, logout, resendVerification, colors } = useAuth();
-    const styles = getStyles(colors);
+    const styles = React.useMemo(() => getStyles(colors, isTablet), [colors, isTablet]);
 
     const [isLogin, setIsLogin] = useState(true);
     const [name, setName] = useState("");
@@ -180,6 +184,7 @@ export default function AuthScreen({ visible, onClose, isGuestMode = false }) {
             statusBarTranslucent
             onRequestClose={onClose}
         >
+            <StatusBar style="light" />
             <KeyboardAvoidingView
                 behavior={Platform.OS === "ios" ? "padding" : "height"}
                 style={styles.modalOverlay}
@@ -351,7 +356,7 @@ export default function AuthScreen({ visible, onClose, isGuestMode = false }) {
 }
 
 // ==================== STYLES ====================
-const getStyles = (colors) => StyleSheet.create({
+const getStyles = (colors, isTablet) => StyleSheet.create({
     modalOverlay: {
         flex: 1,
         backgroundColor: "rgba(0,0,0,0.6)",
@@ -359,7 +364,7 @@ const getStyles = (colors) => StyleSheet.create({
         alignItems: "center",
     },
     modal: {
-        width: "92%",
+        width: isTablet ? 460 : "92%",
         maxHeight: "90%",
         backgroundColor: colors.background || "#FFFFFF",
         borderRadius: 28,

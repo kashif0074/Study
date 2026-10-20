@@ -1,9 +1,13 @@
 // constants/config.js
 import { Platform } from 'react-native';
 
-// Your computer's local IP address discovered via ipconfig: 192.168.0.106
-// This allows physical devices on the same Wi-Fi to connect to the backend
-export const API_BASE_URL = 'http://192.168.0.106:5000/api';
+// ✅ CORRECT IP - Your actual WiFi IP from ipconfig
+// IPv4 Address. . . . . . . . . . . : 10.10.30.219
+const YOUR_WIFI_IP = '192.168.238.1';
+
+export const API_URL = "https://your-service-name.onrender.com";
+
+console.log(`🔧 API URL: ${API_BASE_URL}`);
 
 export const CONFIG = {
     API_URLS: {
@@ -14,6 +18,7 @@ export const CONFIG = {
         COMMUNITIES: `${API_BASE_URL}/communities`,
         ADMIN: `${API_BASE_URL}/admin`,
         UTILS: `${API_BASE_URL}/utils`,
+        HEALTH: `${API_BASE_URL}/health`
     }
 };
 
